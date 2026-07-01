@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { TextField, Button, Typography, Paper } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { apiRequest } from '../../services/api';
 
 const ResetPasswordRequest = () => {
   const [email, setEmail] = useState('');
@@ -27,13 +28,11 @@ const ResetPasswordRequest = () => {
 
   const sendResetEmail = async (email: string) => {
     try {
-      const response = await fetch('/api/request-reset', {
+      const data = await apiRequest<{ success: boolean }>('/api/request-reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      const data = await response.json();
-      return data.success; // Optional, for logging success
+      return data.success;
     } catch (error) {
       console.error('Error sending reset email:', error);
     }

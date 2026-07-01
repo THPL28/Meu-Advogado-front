@@ -4,6 +4,7 @@ import { Button, Paper, TextField, Typography } from '@mui/material';
 import InputAdornment from '@mui/material/InputAdornment';
 import { FormEvent, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { apiRequest } from '../../services/api';
 
 const ResetPasswordConfirm = () => {
   const { token } = useParams();
@@ -31,12 +32,10 @@ const ResetPasswordConfirm = () => {
 
   const updatePassword = async (password: string) => {
     try {
-      const response = await fetch('/api/reset-password', {
+      const data = await apiRequest<{ success: boolean }>('/api/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password, token }),
       });
-      const data = await response.json();
       return data.success;
     } catch (error) {
       console.error('Error updating password:', error);

@@ -11,7 +11,9 @@ interface ClickableCardProps {
   onClick: () => void;
   Icon: ElementType;
 }
-const StyledCard = styled(Card)(({ isActive }: { isActive: boolean }) => ({
+const StyledCard = styled(Card, {
+  shouldForwardProp: (prop) => prop !== 'isActive',
+})(({ isActive }: { isActive: boolean }) => ({
   border: isActive ? '2px solid green' : '2px solid lightGrey',
   borderRadius: '12px',
   transition: 'transform 0.2s ease, border 0.3s ease',
