@@ -1,9 +1,10 @@
-import { Button, Grid, Link, TextField, Typography } from '@mui/material';
+import { Button, CircularProgress, Grid, Link, TextField, Typography } from '@mui/material';
 import { Box } from '@mui/system';
 import { ChangeEvent, FormEvent, useState } from 'react';
-import { Link as RouterLink, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 
 import { green, grey } from '@mui/material/colors';
+import { apiRequest } from '../../services/api';
 
 interface FormData {
   lastname: string;
@@ -21,7 +22,10 @@ interface FormErrors {
 
 const SignupForm = () => {
   const [errors, setErrors] = useState<FormErrors>({});
+  const [apiError, setApiError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { userType } = useParams();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState<FormData>({
     firstname: '',
@@ -30,12 +34,41 @@ const SignupForm = () => {
     password: '',
   });
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (validate()) {
-      console.log('Form Submitted: ', formData);
-      console.log(`user type: ${userType}`);
-      // POST REQUEST FOR THE BACKEND GOES HERE ....
+    setApiError('');
+
+    if (!validate()) return;
+
+    setLoading(true);
+
+    // Map userType from URL to backend role
+    const roleMap: Record<string, string> = {
+      freelancer: 'ROLE_FREELANCER',
+      client: 'ROLE_CLIENT',
+    };
+    const role = roleMap[userType || ''] || 'ROLE_FREELANCER';
+
+    try {
+      await apiRequest('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          firstName: formData.firstname,
+          lastName: formData.lastname,
+          email: formData.email,
+          password: formData.password,
+          roles: [role],
+        }),
+      });
+      navigate('/login');
+    } catch (err) {
+      setApiError(
+        err instanceof Error
+          ? err.message
+          : 'Registration failed. Please try again.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,7 +81,6 @@ const SignupForm = () => {
     setErrors({ ...errors, [name]: '' });
   };
 
-  // input validation function
   const validateName = (name: string) => {
     const nameRegex = /^[A-Za-z'-]+$/;
     return nameRegex.test(name);
@@ -87,7 +119,6 @@ const SignupForm = () => {
     return Object.keys(totalErrors).length === 0;
   };
 
-  //form Structure
   return (
     <Box
       className='form-container'
@@ -134,7 +165,7 @@ const SignupForm = () => {
         <Grid item xs={6}>
           <TextField
             name='firstname'
-            label='first name'
+            label='First name'
             type='text'
             value={formData.firstname}
             onChange={handleChange}
@@ -185,14 +216,19 @@ const SignupForm = () => {
         required
       />
 
+      {apiError && (
+        <Typography color='error' variant='body2' sx={{ mt: 1 }}>
+          {apiError}
+        </Typography>
+      )}
+
       <Button
         type='submit'
         variant='contained'
-        sx={{
-          mt: 2,
-        }}
+        disabled={loading}
+        sx={{ mt: 2 }}
       >
-        Create my account
+        {loading ? <CircularProgress size={24} color='inherit' /> : 'Create my account'}
       </Button>
 
       <Link

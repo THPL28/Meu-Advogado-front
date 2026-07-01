@@ -1,21 +1,48 @@
-import { Box, Button, Link, Paper, TextField, Typography } from '@mui/material';
-import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Box, Button, CircularProgress, Link, Paper, TextField, Typography } from '@mui/material';
+import { FormEvent, useState } from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { apiRequest } from '../../services/api';
+
 export default function Login() {
   const [email, setEmail] = useState('');
-  const [password, serPassword] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  function handleClick() {}
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+
+    if (!email || !password) {
+      setError('Email and password are required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiRequest<string>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+        credentials: 'include',
+      }, true);
+      navigate('/home');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className='login'>
       <Paper
         elevation={3}
         sx={{
-          width: 300, // Set a width for the box
-          mx: 'auto', // Center horizontally
-          mt: 10, // Add some margin to the top
-          p: 3, // Padding inside the box
+          width: 300,
+          mx: 'auto',
+          mt: 10,
+          p: 3,
         }}
       >
         <Typography
@@ -30,7 +57,6 @@ export default function Login() {
             display: 'inline-block',
             transform: 'translateX(-50%)',
             left: '50%',
-
             '&::after': {
               content: '""',
               display: 'block',
@@ -44,42 +70,47 @@ export default function Login() {
           Login
         </Typography>
 
-        <TextField
-          fullWidth
-          label='Email'
-          type='email'
-          variant='outlined'
-          margin='normal'
-          required
-          onChange={(e) => {
-            setEmail(e.target.value);
-            console.log(email);
-          }}
-        />
+        <Box component='form' onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            label='Email'
+            type='email'
+            variant='outlined'
+            margin='normal'
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-        <TextField
-          fullWidth
-          label='Password'
-          type='password'
-          variant='outlined'
-          margin='normal'
-          required
-          onChange={(e) => {
-            serPassword(e.target.value);
-            console.log(password);
-          }}
-        />
+          <TextField
+            fullWidth
+            label='Password'
+            type='password'
+            variant='outlined'
+            margin='normal'
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-        <Button
-          fullWidth
-          variant='contained'
-          color='primary'
-          type='submit'
-          onClick={handleClick}
-          sx={{ mt: 2 }}
-        >
-          Login
-        </Button>
+          {error && (
+            <Typography color='error' variant='body2' sx={{ mt: 1 }}>
+              {error}
+            </Typography>
+          )}
+
+          <Button
+            fullWidth
+            variant='contained'
+            color='primary'
+            type='submit'
+            disabled={loading}
+            sx={{ mt: 2 }}
+          >
+            {loading ? <CircularProgress size={24} color='inherit' /> : 'Login'}
+          </Button>
+        </Box>
+
         <Box
           sx={{
             textAlign: 'center',
@@ -93,7 +124,7 @@ export default function Login() {
             <Link
               component={RouterLink}
               to={'/'}
-              underline='hover' // No underline by default
+              underline='hover'
             >
               Sign Up
             </Link>
@@ -102,7 +133,7 @@ export default function Login() {
             <Link
               component={RouterLink}
               to={'/reset-password'}
-              underline='hover' // No underline by default
+              underline='hover'
             >
               Forgot Password ?
             </Link>
