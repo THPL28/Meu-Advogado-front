@@ -15,7 +15,7 @@
     "preview": "vite preview",
     "format-check": "prettier --check .",
     "prepare": "husky install",
-    "postinstall": "husky install",
+    "postinstall": "husky install 2>/dev/null || true",
     "lint-staged": "lint-staged"
   },
   "husky": {
