@@ -12,6 +12,7 @@ import Login from './components/login/login';
 import Header from './components/login/loginHeader';
 import { SettingsPage } from './components/settings/SettingsPage';
 import HomePage from './components/home/HomePage';
+import FindJobs from './components/home/FindJobs';
 import { CssBaseline } from '@mui/material';
 
 // non-null assertion operator (!), sure it won't be null
@@ -25,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path='/' element={<SignupPage />} />
           <Route path='/signup/:userType' element={<SignupForm />} />
           <Route path='/home' element={<HomePage />} />
+          <Route path='/jobs' element={<FindJobs />} />
           <Route
             path='/reset-password/:token'
             element={<ResetPasswordConfirm />}

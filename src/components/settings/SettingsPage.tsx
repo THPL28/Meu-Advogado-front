@@ -2,6 +2,8 @@ import { Route, Routes } from 'react-router-dom';
 import SideNavigationBar from './SettingsNavigationBar';
 
 import { Container } from '@mui/material';
+import ContactInfo from './ContactInfo';
+import BillingPayments from './BillingPayments';
 
 export const SettingsPage = () => {
   return (
@@ -15,11 +17,11 @@ export const SettingsPage = () => {
         <Routes>
           <Route
             path='/contact-info'
-            element={<h1>testing profile settings</h1>}
+            element={<ContactInfo />}
           />
           <Route
             path='/billing-payments'
-            element={<h1>testing billing and payments</h1>}
+            element={<BillingPayments />}
           />
         </Routes>
       </Container>

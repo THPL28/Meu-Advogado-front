@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -21,8 +21,8 @@ const NonUserNavbar = () => {
   return (
     <Box sx={{ display: 'flex', gap: 1 }}>
       <Button
-        component='a'
-        href='/login'
+        component={Link}
+        to='/login'
         sx={{
           color: 'black',
           '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' },
@@ -31,8 +31,8 @@ const NonUserNavbar = () => {
         Login
       </Button>
       <Button
-        component='a'
-        href='/'
+        component={Link}
+        to='/'
         variant='contained'
         sx={{
           backgroundColor: '#129900',
@@ -67,15 +67,22 @@ const UserNavbar = ({ userEmail, onLogout }: { userEmail?: string | null; onLogo
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <Button
-        component='a'
-        href='/home'
+        component={Link}
+        to='/home'
         sx={{ color: 'black' }}
       >
         Home
       </Button>
       <Button
-        component='a'
-        href='/settings/contact-info'
+        component={Link}
+        to='/jobs'
+        sx={{ color: 'black' }}
+      >
+        Find Jobs
+      </Button>
+      <Button
+        component={Link}
+        to='/settings/contact-info'
         sx={{ color: 'black' }}
       >
         Profile
