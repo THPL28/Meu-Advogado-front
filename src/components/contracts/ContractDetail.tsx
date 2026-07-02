@@ -28,6 +28,7 @@ import {
   ArrowBack as ArrowBackIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
+  Payments as PaymentsIcon,
 } from '@mui/icons-material';
 import { apiGet, apiPost } from '../../services/api';
 
@@ -325,7 +326,30 @@ export function ContractDetail() {
                         </Button>
                       )}
                       {ms.status === 'Completed' && (
-                        <CheckCircleIcon color="success" />
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          <CheckCircleIcon color="success" />
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            color="primary"
+                            startIcon={<PaymentsIcon />}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const resp = await apiPost<{ success: boolean; data: any }>(
+                                  `/api/payments/create/${ms.milestoneId}`, {}
+                                );
+                                if (resp?.success) {
+                                  alert('Pagamento criado com sucesso!');
+                                }
+                              } catch {
+                                alert('Erro ao criar pagamento.');
+                              }
+                            }}
+                          >
+                            Pagar
+                          </Button>
+                        </Box>
                       )}
                       {ms.status === 'Cancelled' && (
                         <CancelIcon color="error" />

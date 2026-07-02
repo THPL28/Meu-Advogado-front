@@ -13,6 +13,7 @@ import GavelIcon from '@mui/icons-material/Gavel';
 import WorkIcon from '@mui/icons-material/Work';
 import BusinessIcon from '@mui/icons-material/Business';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import PaymentsIcon from '@mui/icons-material/Payments';
 import { logout, isLawyer, isClient, isFirm } from '../../services/authService';
 
 interface NavbarProps {
@@ -119,6 +120,17 @@ const UserNavbar = ({ userEmail, onLogout }: { userEmail?: string | null; onLogo
           sx={{ color: 'black' }}
         >
           Mandatos
+        </Button>
+      )}
+
+      {(isLawyer() || isClient()) && (
+        <Button
+          component={Link}
+          to='/payments'
+          startIcon={<PaymentsIcon />}
+          sx={{ color: 'black' }}
+        >
+          Pagamentos
         </Button>
       )}
 
