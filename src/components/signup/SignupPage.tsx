@@ -14,8 +14,7 @@ const SignupPage = () => {
     setActiveCard((prev) => (prev === cardIndex ? null : cardIndex));
   };
   const onSubmit = () => {
-    const role = activeCard === 0 ? 'freelancer' : 'client';
-    navigate(`/signup/${userType}`, { state: { role } });
+    navigate(`/signup/${userType}`, { state: { role: userType } });
   };
 
   return (
