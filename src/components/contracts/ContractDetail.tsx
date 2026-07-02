@@ -19,6 +19,10 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Rating,
+  TextField,
+  Avatar,
+  Snackbar,
 } from '@mui/material';
 import {
   Gavel as GavelIcon,
@@ -29,8 +33,10 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Payments as PaymentsIcon,
+  Star as StarIcon,
 } from '@mui/icons-material';
 import { apiGet, apiPost } from '../../services/api';
+import { getAuthState } from '../../services/authService';
 
 interface MilestoneDTO {
   milestoneId: number;
@@ -41,6 +47,22 @@ interface MilestoneDTO {
   dueDate: string;
   status: string;
   completedAt: string | null;
+}
+
+interface ReviewDTO {
+  reviewId: number;
+  contractId: number;
+  contractTitle: string;
+  reviewerId: number;
+  reviewerName: string;
+  reviewerPhotoUrl: string | null;
+  revieweeId: number;
+  revieweeName: string;
+  revieweePhotoUrl: string | null;
+  revieweeOab: string | null;
+  rating: number;
+  comment: string;
+  createdAt: string;
 }
 
 interface ContractDTO {
@@ -82,12 +104,28 @@ export function ContractDetail() {
   const navigate = useNavigate();
   const { contractId } = useParams<{ contractId: string }>();
   const [contract, setContract] = useState<ContractDTO | null>(null);
+  const [reviews, setReviews] = useState<ReviewDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState<number | null>(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (contractId) loadContract();
+    if (contractId) { loadContract(); loadReviews(); }
   }, [contractId]);
+
+  async function loadReviews() {
+    try {
+      const response = await apiGet<{ success: boolean; data: ReviewDTO[] }>(
+        `/api/reviews/contract/${contractId}`
+      );
+      if (response?.success && response.data) {
+        setReviews(response.data);
+      }
+    } catch { /* ignore */ }
+  }
 
   async function loadContract() {
     try {
@@ -395,6 +433,143 @@ export function ContractDetail() {
           </Button>
         </Box>
       )}
+
+      {/* Reviews Section */}
+      {contract.status === 'Completed' && (
+        <>
+          <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ mt: 3 }}>
+            Avaliações
+          </Typography>
+
+          {/* Existing Reviews */}
+          {reviews.length > 0 && (
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              {reviews.map((review) => (
+                <Grid item xs={12} key={review.reviewId}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Avatar src={review.reviewerPhotoUrl || undefined} sx={{ bgcolor: 'primary.main' }}>
+                          <PersonIcon />
+                        </Avatar>
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="subtitle2" fontWeight="bold">
+                            {review.reviewerName}
+                          </Typography>
+                          <Rating value={review.rating} readOnly size="small" />
+                          {review.comment && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              {review.comment}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            {new Date(review.createdAt).toLocaleDateString('pt-BR')}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+
+          {/* Submit Review */}
+          {(() => {
+            const authState = getAuthState();
+            const isCurrentUserClient = authState.userId === contract.clientId;
+            const isCurrentUserLawyer = authState.userId === contract.lawyerId;
+
+            if (!isCurrentUserClient && !isCurrentUserLawyer) return null;
+
+            const revieweeName = isCurrentUserClient ? contract.lawyerName : contract.clientName;
+            const revieweeId = isCurrentUserClient ? contract.lawyerId : contract.clientId;
+
+            // Check if user already submitted a review
+            const hasReviewed = reviews.some(r => r.reviewerId === authState.userId);
+
+            return (
+              <Card sx={{ mb: 3, backgroundColor: 'grey.50' }}>
+                <CardContent>
+                  {hasReviewed ? (
+                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                      <StarIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        Já avaliaste este contrato
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        A tua avaliação foi registada com sucesso.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                        Avaliar {revieweeName}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <Rating
+                          value={reviewRating}
+                          onChange={(_, v) => setReviewRating(v)}
+                          size="large"
+                          icon={<StarIcon color="primary" fontSize="inherit" />}
+                        />
+                      </Box>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={3}
+                        label="Comentário (opcional)"
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        variant="outlined"
+                        size="small"
+                        sx={{ mb: 2 }}
+                      />
+                      <Button
+                        variant="contained"
+                        startIcon={<StarIcon />}
+                        disabled={submittingReview}
+                        onClick={async () => {
+                          setSubmittingReview(true);
+                          try {
+                            const resp = await apiPost<{ success: boolean; data: ReviewDTO }>(
+                              `/api/reviews/create/${contractId}`,
+                              {
+                                revieweeId,
+                                rating: reviewRating || 5,
+                                comment: reviewComment,
+                              }
+                            );
+                            if (resp?.success) {
+                              setSnackbarMsg('Avaliação enviada com sucesso!');
+                              setReviewComment('');
+                              setReviewRating(5);
+                              loadReviews();
+                            }
+                          } catch {
+                            setSnackbarMsg('Erro ao enviar avaliação.');
+                          } finally {
+                            setSubmittingReview(false);
+                          }
+                        }}
+                      >
+                        {submittingReview ? 'A enviar...' : 'Enviar Avaliação'}
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+        </>
+      )}
+
+      <Snackbar
+        open={!!snackbarMsg}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarMsg(null)}
+        message={snackbarMsg}
+      />
     </Container>
   );
 }

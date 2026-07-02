@@ -14,6 +14,7 @@ import WorkIcon from '@mui/icons-material/Work';
 import BusinessIcon from '@mui/icons-material/Business';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import RateReviewIcon from '@mui/icons-material/RateReview';
 import { logout, isLawyer, isClient, isFirm } from '../../services/authService';
 
 interface NavbarProps {
@@ -131,6 +132,17 @@ const UserNavbar = ({ userEmail, onLogout }: { userEmail?: string | null; onLogo
           sx={{ color: 'black' }}
         >
           Pagamentos
+        </Button>
+      )}
+
+      {(isLawyer() || isClient()) && (
+        <Button
+          component={Link}
+          to='/reviews'
+          startIcon={<RateReviewIcon />}
+          sx={{ color: 'black' }}
+        >
+          Avaliações
         </Button>
       )}
 

@@ -17,6 +17,7 @@ import ProposalForm from './components/proposal/ProposalForm';
 import { MyContracts } from './components/contracts/MyContracts';
 import { ContractDetail } from './components/contracts/ContractDetail';
 import { MyPayments } from './components/payments/MyPayments';
+import { MyReviews } from './components/reviews/MyReviews';
 import { CssBaseline } from '@mui/material';
 
 // non-null assertion operator (!), sure it won't be null
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path='/contracts' element={<MyContracts />} />
           <Route path='/contracts/:contractId' element={<ContractDetail />} />
           <Route path='/payments' element={<MyPayments />} />
+          <Route path='/reviews' element={<MyReviews />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
