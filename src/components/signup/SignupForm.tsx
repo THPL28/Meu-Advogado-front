@@ -45,9 +45,11 @@ const SignupForm = () => {
     // Map userType from URL to backend role
     const roleMap: Record<string, string> = {
       freelancer: 'ROLE_FREELANCER',
+      lawyer: 'ROLE_LAWYER',
       client: 'ROLE_CLIENT',
+      firm: 'ROLE_FIRM',
     };
-    const role = roleMap[userType || ''] || 'ROLE_FREELANCER';
+    const role = roleMap[userType || ''] || 'ROLE_LAWYER';
 
     try {
       await register({

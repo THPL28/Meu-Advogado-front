@@ -1,16 +1,31 @@
 import { Box, Button, Chip, Typography } from '@mui/material';
-import { green, grey } from '@mui/material/colors';
+import { useNavigate } from 'react-router-dom';
+import { green, grey, red, orange } from '@mui/material/colors';
+import { isLawyer } from '../../services/authService';
 
 interface JobCardProps {
+  jobId?: number;
   title: string;
   description: string;
   budget: string;
   jobType: string;
   skills?: string[];
   clientName?: string;
+  urgency?: string;
+  confidentiality?: string;
+  estimatedValue?: string;
+  deadline?: string;
 }
 
-const JobCard = ({ title, description, budget, jobType, skills = [], clientName }: JobCardProps) => {
+const urgencyColors: Record<string, string> = {
+  'Baixa': grey[400],
+  'Média': green[500],
+  'Alta': orange[600],
+  'Urgente': red[700],
+};
+
+const JobCard = ({ jobId, title, description, budget, jobType, skills = [], clientName, urgency, confidentiality, estimatedValue, deadline }: JobCardProps) => {
+  const navigate = useNavigate();
   return (
     <Box
       sx={{
@@ -25,13 +40,26 @@ const JobCard = ({ title, description, budget, jobType, skills = [], clientName 
         },
       }}
     >
-      <Typography variant='h6' fontWeight='bold' gutterBottom>
-        {title}
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+        <Typography variant='h6' fontWeight='bold'>
+          {title}
+        </Typography>
+        {urgency && (
+          <Chip
+            label={urgency}
+            size='small'
+            sx={{
+              backgroundColor: urgencyColors[urgency] || grey[400],
+              color: urgency === 'Baixa' || urgency === 'Média' ? 'white' : 'white',
+              fontWeight: 'bold',
+            }}
+          />
+        )}
+      </Box>
       
       {clientName && (
         <Typography variant='body2' color='text.secondary' gutterBottom>
-          Client: {clientName}
+          Cliente: {clientName}
         </Typography>
       )}
 
@@ -39,28 +67,49 @@ const JobCard = ({ title, description, budget, jobType, skills = [], clientName 
         {description}
       </Typography>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-        <Chip label={`${jobType}`} size='small' variant='outlined' />
-        <Typography variant='body2' fontWeight='bold' color={green[700]}>
-          ${budget}
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap' }}>
+        <Chip label={jobType} size='small' variant='outlined' />
+        {confidentiality === 'Confidential' && (
+          <Chip label='Confidencial' size='small' color='error' variant='outlined' />
+        )}
+        {deadline && (
+          <Typography variant='body2' color='text.secondary'>
+            Prazo: {new Date(deadline).toLocaleDateString('pt-BR')}
+          </Typography>
+        )}
       </Box>
 
+      {estimatedValue && (
+        <Typography variant='body2' fontWeight='bold' color={green[700]}>
+          Valor estimado: R$ {parseFloat(estimatedValue).toLocaleString('pt-BR')}
+        </Typography>
+      )}
+
       {skills.length > 0 && (
-        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
           {skills.map((skill) => (
             <Chip key={skill} label={skill} size='small' sx={{ backgroundColor: grey[100] }} />
           ))}
         </Box>
       )}
 
-      <Box sx={{ mt: 2 }}>
+      <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+        {isLawyer() && (
+          <Button
+            variant='contained'
+            size='small'
+            onClick={() => navigate(`/proposals/${jobId}`)}
+            sx={{ backgroundColor: green[700], '&:hover': { backgroundColor: green[800] } }}
+          >
+            Enviar Proposta
+          </Button>
+        )}
         <Button
-          variant='contained'
+          variant='outlined'
           size='small'
-          sx={{ backgroundColor: green[700], '&:hover': { backgroundColor: green[800] } }}
+          sx={{ borderColor: green[700], color: green[700] }}
         >
-          View Details
+          Ver Detalhes
         </Button>
       </Box>
     </Box>

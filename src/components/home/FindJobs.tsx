@@ -1,72 +1,92 @@
-import { Box, Container, TextField, Typography, InputAdornment, CircularProgress, Chip } from '@mui/material';
+import { Box, Container, TextField, Typography, InputAdornment, CircularProgress, Chip, MenuItem } from '@mui/material';
 import { useEffect, useState } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
+import GavelIcon from '@mui/icons-material/Gavel';
 import JobCard from './JobCard';
 import { apiRequest } from '../../services/api';
 import { green, grey } from '@mui/material/colors';
 
-interface JobData {
+interface LegalCaseDTO {
+  jobId?: number;
   title: string;
   description: string;
   budget: string;
   jobType: string;
-  skillIds?: number[];
-}
-
-interface JobWithSkills extends JobData {
-  jobId?: number;
+  urgency: string;
+  confidentiality: string;
+  estimatedValue?: string;
+  deadline?: string;
+  specialtyId?: number;
   clientName?: string;
   skills?: string[];
+  skillNames?: string[];
 }
 
+const urgencyLabels: Record<string, string> = {
+  'Low': 'Baixa',
+  'Medium': 'Média',
+  'High': 'Alta',
+  'Urgent': 'Urgente',
+};
+
+const typeLabels: Record<string, string> = {
+  'Hourly': 'Por Hora',
+  'Fixed': 'Fixo',
+  'ProBono': 'Pro Bono',
+  'Contingency': 'Êxito',
+};
+
 const FindJobs = () => {
-  const [jobs, setJobs] = useState<JobWithSkills[]>([]);
+  const [cases, setCases] = useState<LegalCaseDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedUrgency, setSelectedUrgency] = useState<string | null>(null);
 
   useEffect(() => {
-    loadJobs();
+    loadCases();
   }, []);
 
-  const loadJobs = async () => {
+  const loadCases = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest<{ data: JobWithSkills[] }>('/api/jobs', { credentials: 'include' });
-      if (response && response.data) {
-        setJobs(response.data);
+      const response = await apiRequest<{ success: boolean; data: LegalCaseDTO[] }>('/api/jobs', { credentials: 'include' });
+      if (response?.success && response.data) {
+        setCases(response.data);
       }
     } catch {
-      // Jobs not loaded
+      // Cases not loaded
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredJobs = jobs.filter((job) => {
+  const filteredCases = cases.filter((c) => {
     const matchesSearch = !search || 
-      job.title?.toLowerCase().includes(search.toLowerCase()) ||
-      job.description?.toLowerCase().includes(search.toLowerCase());
-    const matchesType = !selectedType || job.jobType === selectedType;
-    return matchesSearch && matchesType;
+      c.title?.toLowerCase().includes(search.toLowerCase()) ||
+      c.description?.toLowerCase().includes(search.toLowerCase());
+    const matchesUrgency = !selectedUrgency || c.urgency === selectedUrgency;
+    return matchesSearch && matchesUrgency;
   });
 
-  const jobTypes = [...new Set(jobs.map((j) => j.jobType).filter(Boolean))];
+  const urgencyLevels = [...new Set(cases.map((c) => c.urgency).filter(Boolean))];
 
   return (
     <Container maxWidth='lg' sx={{ py: 4 }}>
-      <Typography variant='h4' fontWeight='bold' gutterBottom>
-        Find Jobs
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <GavelIcon sx={{ fontSize: 32, color: green[700] }} />
+        <Typography variant='h4' fontWeight='bold'>
+          Casos Jurídicos Disponíveis
+        </Typography>
+      </Box>
       <Typography variant='body1' color='text.secondary' sx={{ mb: 4 }}>
-        Browse available projects and find your next opportunity
+        Encontre casos jurídicos que correspondam à sua especialidade
       </Typography>
 
       {/* Search Bar */}
       <TextField
         fullWidth
         variant='outlined'
-        placeholder='Search jobs by title or description...'
+        placeholder='Pesquisar casos por título ou descrição...'
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         sx={{ mb: 3 }}
@@ -80,47 +100,53 @@ const FindJobs = () => {
       />
 
       {/* Filter Chips */}
-      {jobTypes.length > 0 && (
+      {urgencyLevels.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
           <Chip
-            label='All'
-            onClick={() => setSelectedType(null)}
-            variant={selectedType === null ? 'filled' : 'outlined'}
-            sx={selectedType === null ? { backgroundColor: green[700], color: 'white' } : {}}
+            label='Todas'
+            onClick={() => setSelectedUrgency(null)}
+            variant={selectedUrgency === null ? 'filled' : 'outlined'}
+            sx={selectedUrgency === null ? { backgroundColor: green[700], color: 'white' } : {}}
           />
-          {jobTypes.map((type) => (
+          {urgencyLevels.map((level) => (
             <Chip
-              key={type}
-              label={type}
-              onClick={() => setSelectedType(type === selectedType ? null : type)}
-              variant={selectedType === type ? 'filled' : 'outlined'}
-              sx={selectedType === type ? { backgroundColor: green[700], color: 'white' } : {}}
+              key={level}
+              label={urgencyLabels[level] || level}
+              onClick={() => setSelectedUrgency(level === selectedUrgency ? null : level)}
+              variant={selectedUrgency === level ? 'filled' : 'outlined'}
+              color={level === 'Urgent' ? 'error' : level === 'High' ? 'warning' : 'default'}
+              sx={selectedUrgency === level && level !== 'Urgent' && level !== 'High' ? { backgroundColor: green[700], color: 'white' } : {}}
             />
           ))}
         </Box>
       )}
 
-      {/* Job Listings */}
+      {/* Case Listings */}
       {loading ? (
         <Box textAlign='center' py={8}>
           <CircularProgress />
         </Box>
-      ) : filteredJobs.length === 0 ? (
+      ) : filteredCases.length === 0 ? (
         <Box textAlign='center' py={8}>
           <Typography variant='h6' color='text.secondary'>
-            {search || selectedType ? 'No jobs match your search criteria.' : 'No jobs available yet. Check back later!'}
+            {search || selectedUrgency ? 'Nenhum caso encontrado com esses critérios.' : 'Nenhum caso disponível no momento.'}
           </Typography>
         </Box>
       ) : (
-        filteredJobs.map((job, index) => (
+        filteredCases.map((c, index) => (
           <JobCard
-            key={job.jobId || index}
-            title={job.title}
-            description={job.description}
-            budget={job.budget}
-            jobType={job.jobType}
-            clientName={job.clientName}
-            skills={job.skills}
+            key={c.jobId || index}
+            jobId={c.jobId}
+            title={c.title}
+            description={c.description}
+            budget={c.budget}
+            jobType={typeLabels[c.jobType] || c.jobType}
+            clientName={c.clientName}
+            skills={c.skillNames || c.skills}
+            urgency={urgencyLabels[c.urgency] || c.urgency}
+            confidentiality={c.confidentiality}
+            estimatedValue={c.estimatedValue}
+            deadline={c.deadline}
           />
         ))
       )}
