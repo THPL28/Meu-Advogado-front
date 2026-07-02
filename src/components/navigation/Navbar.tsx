@@ -15,6 +15,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import { logout, isLawyer, isClient, isFirm } from '../../services/authService';
 import { NotificationBell } from '../notifications/NotificationBell';
 
@@ -79,6 +80,15 @@ const UserNavbar = ({ userEmail, onLogout }: { userEmail?: string | null; onLogo
         sx={{ color: 'black' }}
       >
         Início
+      </Button>
+
+      <Button
+        component={Link}
+        to='/dashboard'
+        startIcon={<DashboardIcon />}
+        sx={{ color: 'black' }}
+      >
+        Dashboard
       </Button>
 
       {isLawyer() && (
