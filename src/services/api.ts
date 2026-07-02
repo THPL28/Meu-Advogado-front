@@ -13,6 +13,7 @@ export async function apiRequest<T = unknown>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
+    credentials: options.credentials || 'include',
   });
 
   if (!response.ok) {
@@ -25,4 +26,41 @@ export async function apiRequest<T = unknown>(
   }
 
   return response.json() as Promise<T>;
+}
+
+export async function apiGet<T = unknown>(
+  endpoint: string
+): Promise<T> {
+  return apiRequest<T>(endpoint, { credentials: 'include' });
+}
+
+export async function apiPost<T = unknown>(
+  endpoint: string,
+  body: unknown
+): Promise<T> {
+  return apiRequest<T>(endpoint, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+}
+
+export async function apiPut<T = unknown>(
+  endpoint: string,
+  body: unknown
+): Promise<T> {
+  return apiRequest<T>(endpoint, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+}
+
+export async function apiDelete<T = unknown>(
+  endpoint: string
+): Promise<T> {
+  return apiRequest<T>(endpoint, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
 }
