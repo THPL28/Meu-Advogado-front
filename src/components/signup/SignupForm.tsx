@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 
 import { green, grey } from '@mui/material/colors';
-import { apiRequest } from '../../services/api';
+import { register } from '../../services/authService';
 
 interface FormData {
   lastname: string;
@@ -50,15 +50,12 @@ const SignupForm = () => {
     const role = roleMap[userType || ''] || 'ROLE_FREELANCER';
 
     try {
-      await apiRequest('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          firstName: formData.firstname,
-          lastName: formData.lastname,
-          email: formData.email,
-          password: formData.password,
-          roles: [role],
-        }),
+      await register({
+        firstName: formData.firstname,
+        lastName: formData.lastname,
+        email: formData.email,
+        password: formData.password,
+        roles: [role],
       });
       navigate('/login');
     } catch (err) {

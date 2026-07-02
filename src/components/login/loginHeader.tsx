@@ -2,18 +2,22 @@ import { AppBar, Toolbar } from '@mui/material';
 import { Container, styled } from '@mui/system';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../navigation/Navbar';
+import { getAuthState } from '../../services/authService';
 
 const Logo = styled('img')({
-  height: '50px', // Adjust the height as needed
-  marginRight: '16px', // Space between logo and text
+  height: '50px',
+  marginRight: '16px',
   cursor: 'pointer',
 });
 
 const Header = () => {
   const navigate = useNavigate();
+  const { isLoggedIn, email } = getAuthState();
+
   const onClick = () => {
     navigate('/');
   };
+
   return (
     <Container>
       <AppBar
@@ -36,7 +40,7 @@ const Header = () => {
             onClick={onClick}
           />
         </Toolbar>
-        <Navbar isUser={false} />
+        <Navbar isUser={isLoggedIn} userEmail={email} />
       </AppBar>
     </Container>
   );

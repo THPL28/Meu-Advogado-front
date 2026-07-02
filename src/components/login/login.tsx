@@ -1,7 +1,7 @@
 import { Box, Button, CircularProgress, Link, Paper, TextField, Typography } from '@mui/material';
 import { FormEvent, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { apiRequest } from '../../services/api';
+import { login } from '../../services/authService';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -21,11 +21,7 @@ export default function Login() {
 
     setLoading(true);
     try {
-      await apiRequest<string>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-        credentials: 'include',
-      }, true);
+      await login(email, password);
       navigate('/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
