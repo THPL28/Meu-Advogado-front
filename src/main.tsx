@@ -18,6 +18,7 @@ import { MyContracts } from './components/contracts/MyContracts';
 import { ContractDetail } from './components/contracts/ContractDetail';
 import { MyPayments } from './components/payments/MyPayments';
 import { MyReviews } from './components/reviews/MyReviews';
+import { MyNotifications } from './components/notifications/MyNotifications';
 import { CssBaseline } from '@mui/material';
 
 // non-null assertion operator (!), sure it won't be null
@@ -45,6 +46,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path='/contracts/:contractId' element={<ContractDetail />} />
           <Route path='/payments' element={<MyPayments />} />
           <Route path='/reviews' element={<MyReviews />} />
+          <Route path='/notifications' element={<MyNotifications />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

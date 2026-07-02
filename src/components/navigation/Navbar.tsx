@@ -16,6 +16,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import { logout, isLawyer, isClient, isFirm } from '../../services/authService';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 interface NavbarProps {
   isUser: boolean;
@@ -153,6 +154,7 @@ const UserNavbar = ({ userEmail, onLogout }: { userEmail?: string | null; onLogo
       >
         Perfil
       </Button>
+      <NotificationBell />
       <IconButton
         size='large'
         onClick={handleMenu}
