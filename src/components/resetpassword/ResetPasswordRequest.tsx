@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { TextField, Button, Typography, Paper } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { apiRequest } from '../../services/api';
+import { forgotPassword } from '../../services/authService';
 
 const ResetPasswordRequest = () => {
   const [email, setEmail] = useState('');
@@ -19,24 +19,18 @@ const ResetPasswordRequest = () => {
     }
 
     // Send reset email
-    await sendResetEmail(email);
+    try {
+      await forgotPassword(email);
+    } catch {
+      // Ignore errors - navigate anyway for security (prevent email enumeration)
+    }
     // Navigate to the success page regardless of the sending result
     navigate('/password-sent');
   };
 
   const validateEmail = (email: string) => /\S+@\S+\.\S+/.test(email);
 
-  const sendResetEmail = async (email: string) => {
-    try {
-      const data = await apiRequest<{ success: boolean }>('/api/request-reset', {
-        method: 'POST',
-        body: JSON.stringify({ email }),
-      });
-      return data.success;
-    } catch (error) {
-      console.error('Error sending reset email:', error);
-    }
-  };
+
 
   return (
     <div

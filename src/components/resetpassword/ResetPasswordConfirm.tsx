@@ -3,11 +3,12 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { Button, Paper, TextField, Typography } from '@mui/material';
 import InputAdornment from '@mui/material/InputAdornment';
 import { FormEvent, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { apiRequest } from '../../services/api';
+import { useNavigate, useParams } from 'react-router-dom';
+import { resetPassword } from '../../services/authService';
 
 const ResetPasswordConfirm = () => {
   const { token } = useParams();
+  const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,24 +25,15 @@ const ResetPasswordConfirm = () => {
       setError("Passwords don't match");
       return;
     }
-    const success = await updatePassword(password);
-    if (success) {
-      // Handle success (e.g., navigate to login page)
+    try {
+      await resetPassword(token || '', password);
+      navigate('/login');
+    } catch {
+      setError('Failed to reset password. The link may be invalid or expired.');
     }
   };
 
-  const updatePassword = async (password: string) => {
-    try {
-      const data = await apiRequest<{ success: boolean }>('/api/reset-password', {
-        method: 'POST',
-        body: JSON.stringify({ password, token }),
-      });
-      return data.success;
-    } catch (error) {
-      console.error('Error updating password:', error);
-      return false;
-    }
-  };
+
 
   return (
     <div
