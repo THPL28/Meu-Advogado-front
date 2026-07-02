@@ -55,3 +55,12 @@ export async function apiPut<T = unknown>(
     credentials: 'include',
   });
 }
+
+export async function apiDelete<T = unknown>(
+  endpoint: string
+): Promise<T> {
+  return apiRequest<T>(endpoint, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+}

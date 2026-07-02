@@ -39,6 +39,7 @@ import {
 import { apiGet, apiPost } from '../../services/api';
 import { getAuthState } from '../../services/authService';
 import { ChatBox } from '../chat/ChatBox';
+import { DocumentSection } from '../documents/DocumentSection';
 
 interface MilestoneDTO {
   milestoneId: number;
@@ -401,6 +402,13 @@ export function ContractDetail() {
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+
+      {/* Documents Section */}
+      {(contract.status === 'Active' || contract.status === 'Completed') && (
+        <Box sx={{ mb: 3 }}>
+          <DocumentSection contractId={parseInt(contractId || '0')} />
+        </Box>
       )}
 
       {/* Chat Section */}
