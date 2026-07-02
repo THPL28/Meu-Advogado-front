@@ -34,9 +34,11 @@ import {
   Cancel as CancelIcon,
   Payments as PaymentsIcon,
   Star as StarIcon,
+  Chat as ChatIcon,
 } from '@mui/icons-material';
 import { apiGet, apiPost } from '../../services/api';
 import { getAuthState } from '../../services/authService';
+import { ChatBox } from '../chat/ChatBox';
 
 interface MilestoneDTO {
   milestoneId: number;
@@ -399,6 +401,24 @@ export function ContractDetail() {
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+
+      {/* Chat Section */}
+      {(contract.status === 'Active' || contract.status === 'Completed') && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent sx={{ pb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <ChatIcon color="primary" />
+              <Typography variant="h6" fontWeight="bold">
+                Chat com {(() => {
+                  const s = getAuthState();
+                  return s.userId === contract.clientId ? contract.lawyerName : contract.clientName;
+                })()}
+              </Typography>
+            </Box>
+            <ChatBox contractId={parseInt(contractId || '0')} />
+          </CardContent>
+        </Card>
       )}
 
       {/* Actions */}
