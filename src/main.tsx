@@ -13,6 +13,9 @@ import Header from './components/login/loginHeader';
 import { SettingsPage } from './components/settings/SettingsPage';
 import HomePage from './components/home/HomePage';
 import FindJobs from './components/home/FindJobs';
+import { PostJobForm } from './components/jobs/PostJobForm';
+import { ManageJobs } from './components/jobs/ManageJobs';
+import { JobProposals } from './components/proposal/JobProposals';
 import ProposalForm from './components/proposal/ProposalForm';
 import { MyContracts } from './components/contracts/MyContracts';
 import { ContractDetail } from './components/contracts/ContractDetail';
@@ -34,6 +37,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path='/signup/:userType' element={<SignupForm />} />
           <Route path='/home' element={<HomePage />} />
           <Route path='/jobs' element={<FindJobs />} />
+          <Route path='/jobs/create' element={<PostJobForm />} />
+          <Route path='/jobs/manage' element={<ManageJobs />} />
+          <Route path='/jobs/:jobId/proposals' element={<JobProposals />} />
           <Route
             path='/reset-password/:token'
             element={<ResetPasswordConfirm />}

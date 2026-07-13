@@ -103,14 +103,24 @@ const UserNavbar = ({ userEmail, onLogout }: { userEmail?: string | null; onLogo
       )}
 
       {isClient() && (
-        <Button
-          component={Link}
-          to='/jobs'
-          startIcon={<WorkIcon />}
-          sx={{ color: 'black' }}
-        >
-          Publicar Caso
-        </Button>
+        <>
+          <Button
+            component={Link}
+            to='/jobs/create'
+            startIcon={<WorkIcon />}
+            sx={{ color: 'black' }}
+          >
+            Publicar Caso
+          </Button>
+          <Button
+            component={Link}
+            to='/jobs/manage'
+            startIcon={<AssignmentIcon />}
+            sx={{ color: 'black' }}
+          >
+            Meus Casos
+          </Button>
+        </>
       )}
 
       {isFirm() && (
