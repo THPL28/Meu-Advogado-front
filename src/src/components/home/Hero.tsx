@@ -1,5 +1,7 @@
 import { Box, Button, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import { green } from '@mui/material/colors';
+
 const Hero = () => {
   return (
     <Container
@@ -7,17 +9,18 @@ const Hero = () => {
       sx={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         flex: '1',
-        gap: '1rem',
-        marginTop: '5rem',
+        gap: '2rem',
+        py: { xs: 4, md: 8 },
       }}
     >
       <Box
         sx={{
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem',
+          gap: 2,
+          maxWidth: 560,
           '@media (max-width: 1040px)': {
             justifyContent: 'center',
             alignItems: 'center',
@@ -25,40 +28,55 @@ const Hero = () => {
           },
         }}
       >
-        <Typography component='h1' variant='h2'>
-          Get it done with a freelancer
+        <Typography component='h1' variant='h3' fontWeight='bold' color='text.primary'>
+          Conecte clientes e advogados em um só lugar
         </Typography>
-        <Typography component='p'>
-          Our digital marketing agency helps businesses grow and succeed online
-          through a range of services including SEO, PPC, social media
-          marketing, and content creation.
+        <Typography component='p' variant='body1' color='text.secondary'>
+          Acompanhe casos, envie propostas, organize contratos e acompanhe pagamentos com uma experiência simples e segura.
         </Typography>
         <Button
+          component={RouterLink}
+          to='/login'
+          variant='contained'
           sx={{
-            width: '30%',
-            color: 'white',
-            padding: '.5rem 1rem',
+            width: { xs: '100%', sm: 'fit-content' },
+            px: 3,
+            py: 1.2,
+            borderRadius: 3,
+            backgroundColor: green[700],
+            '&:hover': { backgroundColor: green[800] },
           }}
         >
-          <RouterLink style={{ color: 'white', textDecoration: 'none' }} to='/'>
-            Get started
-          </RouterLink>
+          Acessar plataforma
         </Button>
       </Box>
       <Box
         sx={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
           '@media (max-width: 1040px)': {
             display: 'none',
           },
         }}
       >
-        <img
-          style={{
+        <Box
+          sx={{
             width: '100%',
-            height: '100%',
+            maxWidth: 480,
+            minHeight: 320,
+            borderRadius: 4,
+            background: 'linear-gradient(135deg, #eaf6ea 0%, #d5ead3 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.08)',
           }}
-          src='./images/hero-section-img.png'
-        />
+        >
+          <Typography variant='h5' fontWeight='bold' color={green[800]}>
+            Meu Advogado
+          </Typography>
+        </Box>
       </Box>
     </Container>
   );
