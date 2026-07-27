@@ -1,6 +1,6 @@
 import { AppBar, Toolbar } from '@mui/material';
 import { Container, styled } from '@mui/system';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../navigation/Navbar';
 import { getAuthState } from '../../services/authService';
 
@@ -12,11 +12,17 @@ const Logo = styled('img')({
 
 const Header = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn, email } = getAuthState();
 
   const onClick = () => {
     navigate('/');
   };
+
+  const isAuthRoute = location.pathname === '/login' || location.pathname === '/' || location.pathname === '/reset-password' || location.pathname === '/password-sent' || location.pathname.startsWith('/signup');
+  if (isAuthRoute) {
+    return null;
+  }
 
   return (
     <Container>

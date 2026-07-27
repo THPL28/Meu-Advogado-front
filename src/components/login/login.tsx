@@ -1,8 +1,9 @@
-import { Box, Button, CircularProgress, Link, Paper, TextField, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Link, Paper, TextField, Typography, Divider, InputAdornment } from '@mui/material';
 import { FormEvent, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { login } from '../../services/authService';
-import { green } from '@mui/material/colors';
+import { MailOutline, LockOutlined, Login as LoginIcon, SecurityOutlined } from '@mui/icons-material';
+import AuthLayout from '../Shared/AuthLayout';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -32,50 +33,110 @@ export default function Login() {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#f5f8f4', py: 6, px: 2 }}>
+    <AuthLayout>
       <Paper
         elevation={0}
         sx={{
-          width: { xs: '100%', sm: 420 },
-          mx: 'auto',
-          p: { xs: 3, md: 4 },
-          borderRadius: 4,
-          border: '1px solid',
-          borderColor: 'divider',
-          boxShadow: '0 12px 40px rgba(16, 63, 19, 0.08)',
+          width: { xs: '90%', sm: 460 },
+          p: { xs: 3, md: 5 },
+          borderRadius: 2,
+          border: '1px solid #e0e0e0',
+          boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.03)',
         }}
       >
-        <Typography variant='h5' fontWeight='bold' textAlign='center' color={green[800]}>
-          Acesse sua conta
-        </Typography>
-        <Typography variant='body2' textAlign='center' color='text.secondary' sx={{ mt: 1, mb: 2 }}>
-          Entre para gerenciar seus casos, propostas e contratos.
-        </Typography>
+        <Box component='form' onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Box>
+            <Typography variant='caption' fontWeight='bold' color='text.secondary' sx={{ mb: 1, display: 'block', letterSpacing: 1 }}>
+              E-MAIL CORPORATIVO
+            </Typography>
+            <TextField 
+              fullWidth 
+              type='email' 
+              placeholder='exemplo@legalwork.com.br'
+              required 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <MailOutline sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+                sx: { borderRadius: 2 }
+              }}
+            />
+          </Box>
 
-        <Box component='form' onSubmit={handleSubmit}>
-          <TextField fullWidth label='E-mail' type='email' margin='normal' required value={email} onChange={(e) => setEmail(e.target.value)} />
-          <TextField fullWidth label='Senha' type='password' margin='normal' required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant='caption' fontWeight='bold' color='text.secondary' sx={{ letterSpacing: 1 }}>
+                SENHA
+              </Typography>
+              <Link component={RouterLink} to='/reset-password' underline='hover' sx={{ variant: 'caption', fontSize: '0.8rem', color: '#16a30b', fontWeight: 'bold' }}>
+                Esqueceu a senha?
+              </Link>
+            </Box>
+            <TextField 
+              fullWidth 
+              type='password' 
+              placeholder='••••••••'
+              required 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockOutlined sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+                sx: { borderRadius: 2 }
+              }}
+            />
+          </Box>
 
           {error && (
-            <Typography color='error' variant='body2' sx={{ mt: 1 }}>
+            <Typography color='error' variant='body2' sx={{ textAlign: 'center' }}>
               {error}
             </Typography>
           )}
 
-          <Button fullWidth variant='contained' type='submit' disabled={loading} sx={{ mt: 2, backgroundColor: green[700], '&:hover': { backgroundColor: green[800] } }}>
+          <Button 
+            fullWidth 
+            variant='contained' 
+            type='submit' 
+            disabled={loading} 
+            endIcon={!loading && <LoginIcon />}
+            sx={{ 
+              mt: 1, 
+              py: 1.5,
+              backgroundColor: '#16a30b', 
+              textTransform: 'none',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              borderRadius: 2,
+              '&:hover': { backgroundColor: '#128209' } 
+            }}
+          >
             {loading ? <CircularProgress size={24} color='inherit' /> : 'Entrar'}
           </Button>
-        </Box>
 
-        <Box sx={{ textAlign: 'center', mt: 2, display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Typography variant='body2'>
-            <Link component={RouterLink} to='/' underline='hover'>Criar conta</Link>
-          </Typography>
-          <Typography variant='body2'>
-            <Link component={RouterLink} to='/reset-password' underline='hover'>Esqueci minha senha</Link>
+          <Divider sx={{ my: 1 }} />
+
+          <Typography variant='body2' sx={{ textAlign: 'center', color: 'text.secondary' }}>
+            Não possui uma conta? {' '}
+            <Link component={RouterLink} to='/' underline='hover' sx={{ color: '#16a30b', fontWeight: 'bold' }}>
+              Criar conta
+            </Link>
           </Typography>
         </Box>
       </Paper>
-    </Box>
+
+      <Box sx={{ mt: 4, display: 'flex', alignItems: 'center', gap: 1, color: '#9e9e9e' }}>
+        <SecurityOutlined fontSize="small" />
+        <Typography variant='body2' sx={{ letterSpacing: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
+          Ambiente Seguro & Criptografado
+        </Typography>
+      </Box>
+    </AuthLayout>
   );
 }
