@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import SignupPage from './components/signup/SignupPage';
 import { ThemeProvider } from '@mui/material/styles';
-import SignupForm from './components/signup/SignupForm';
 import ResetPasswordRequest from './components/resetpassword/ResetPasswordRequest';
 import ResetPasswordConfirm from './components/resetpassword/ResetPasswordConfirm';
 import PasswordSent from './components/resetpassword/PasswordSent';
@@ -34,7 +33,6 @@ createRoot(document.getElementById('root')!).render(
         <Header />
         <Routes>
           <Route path='/' element={<SignupPage />} />
-          <Route path='/signup/:userType' element={<SignupForm />} />
           <Route path='/home' element={<HomePage />} />
           <Route path='/jobs' element={<FindJobs />} />
           <Route path='/jobs/create' element={<PostJobForm />} />
