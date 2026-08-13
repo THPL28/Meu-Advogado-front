@@ -54,6 +54,16 @@ const MainLayout: React.FC = () => {
     if (!loading && !user && activeTab !== 'landing' && activeTab !== 'login' && activeTab !== 'register' && activeTab !== 'find-lawyers' && activeTab !== 'profile') {
       setActiveTab('landing');
     }
+
+    // Role-based tab protection (Fase 1 - Auditoria e Alinhamento UI)
+    if (!loading && user) {
+      const userRole = user.role;
+      if (userRole === 'CLIENT' && (activeTab === 'find-jobs' || activeTab === 'subscription')) {
+        setActiveTab('find-lawyers');
+      } else if (userRole === 'LAWYER' && activeTab === 'find-lawyers') {
+        setActiveTab('find-jobs');
+      }
+    }
   }, [user, loading, activeTab, setActiveTab]);
 
   if (loading) {

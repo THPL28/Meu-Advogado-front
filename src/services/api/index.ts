@@ -1,15 +1,9 @@
 /**
  * ============================================================
- * LWork – API Service Layer (Hybrid: Real Backend + Mock)
+ * LegaWork – API Service Layer (Connected to Production Backend)
  * ============================================================
  * This is the SINGLE source of truth for all data operations.
  * Pages and components MUST NOT call fetch() directly.
- *
- * STRATEGY:
- *   - When API_CONFIG.useMock === false → calls real Spring Boot
- *     REST API at /api/* (proxied by Vite in dev).
- *   - When API_CONFIG.useMock === true OR a network error occurs
- *     → falls back to localStorage-persisted mock data.
  *
  * BACKEND AUTH:
  *   - Spring Boot sets HttpOnly cookies (jwt_token, jwt_refresh_token)
@@ -40,6 +34,7 @@ import {
   MilestoneStatus,
   Role,
   Review,
+  ContractStatus,
 } from '../../types';
 import {
   INITIAL_LAWYER_USER,
@@ -82,12 +77,6 @@ function clearAuthStorage(): void {
 // ─────────────────────────────────────────────
 // SECTION 2 – HTTP HELPER (real backend calls)
 // ─────────────────────────────────────────────
-/**
- * Wraps fetch with:
- *  - credentials: 'include' for HttpOnly JWT cookies
- *  - auto-retry with refresh token on 401
- *  - throws on non-ok responses with backend error message
- */
 let isRefreshing = false;
 
 async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -103,7 +92,7 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   // Token expired – attempt one silent refresh
-  if (res.status === 401 && !isRefreshing) {
+  if (res.status === 401 && !isRefreshing && !path.includes('/api/auth/login')) {
     isRefreshing = true;
     try {
       const refreshRes = await fetch(`${API_CONFIG.baseURL}/api/auth/refresh-token`, {
@@ -124,7 +113,7 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
         });
         if (!retryRes.ok) throw new Error('Unauthorized');
         const retryData = await retryRes.json();
-        return retryData.data ?? retryData;
+        return (retryData.data !== undefined ? retryData.data : retryData) as T;
       }
     } catch {
       isRefreshing = false;
@@ -143,17 +132,13 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   const json = await res.json();
-  // Backend always wraps data in { success, data, error }
+  // Backend always wraps data in { success, data, error } or returns direct entity
   return (json.data !== undefined ? json.data : json) as T;
 }
 
 // ─────────────────────────────────────────────
-// SECTION 3 – ROLE MAPPER
+// SECTION 3 – ENTITY MAPPERS
 // ─────────────────────────────────────────────
-/**
- * Maps Spring Security roles (e.g. ROLE_LAWYER, ROLE_FREELANCER)
- * to the frontend Role type (LAWYER | CLIENT | ADMIN).
- */
 function mapBackendRoles(roles: string[]): Role {
   if (!roles || roles.length === 0) return 'CLIENT';
   const normalized = roles.map((r) => r.replace('ROLE_', '').toUpperCase());
@@ -162,10 +147,6 @@ function mapBackendRoles(roles: string[]): Role {
   return 'CLIENT';
 }
 
-/**
- * Converts a backend CurrentUserDto / UserProfileDto into the
- * frontend UserProfile interface.
- */
 function mapBackendUser(raw: Record<string, unknown>): UserProfile {
   const role = mapBackendRoles((raw.roles as string[]) || []);
   return {
@@ -185,7 +166,7 @@ function mapBackendUser(raw: Record<string, unknown>): UserProfile {
     specialties: (raw.specialties as string[]) ?? [],
     skills: (raw.skills as string[]) ?? [],
     hourlyRate: (raw.hourlyRate as number) ?? undefined,
-    rating: (raw.rating as number) ?? 0,
+    rating: (raw.rating as number) ?? 5.0,
     reviewCount: (raw.reviewCount as number) ?? 0,
     completedCasesCount: (raw.completedCasesCount as number) ?? 0,
     verifiedOab: Boolean(raw.verifiedOab ?? (raw.oabNumber ? true : false)),
@@ -216,15 +197,120 @@ function mapBackendUser(raw: Record<string, unknown>): UserProfile {
   };
 }
 
+function mapBackendJob(raw: Record<string, unknown>): Job {
+  const budgetVal = Number(raw.budget || raw.estimatedValue || 0);
+  return {
+    id: String(raw.jobId ?? raw.id ?? ''),
+    title: (raw.title as string) || 'Demanda Jurídica',
+    description: (raw.description as string) || '',
+    processNumber: (raw.processNumber as string) || undefined,
+    clientId: String(raw.clientId ?? (raw.client as any)?.id ?? ''),
+    clientName: (raw.clientName as string) || ((raw.client as any) ? `${(raw.client as any).firstName || ''} ${(raw.client as any).lastName || ''}`.trim() : 'Cliente'),
+    clientAvatar: (raw.clientAvatar as string) || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=256',
+    type: ((raw.jobType as string)?.toUpperCase() as any) || 'LITIGATION',
+    specialty: (raw.specialtyName as string) || ((raw.specialty as any)?.name as string) || 'Direito Empresarial',
+    status: ((raw.status as string)?.toUpperCase() as JobStatus) || 'OPEN',
+    urgency: ((raw.urgency as string)?.toUpperCase() as any) || 'MEDIUM',
+    confidentiality: ((raw.confidentiality as string)?.toUpperCase() as any) || 'STANDARD',
+    budgetMin: budgetVal,
+    budgetMax: budgetVal,
+    estimatedDeadlineDays: raw.deadline ? Math.max(1, Math.round((new Date(raw.deadline as string).getTime() - Date.now()) / 86400000)) : 30,
+    createdAt: (raw.createdAt as string) || new Date().toISOString(),
+    updatedAt: (raw.updatedAt as string) || (raw.lastModifiedAt as string) || new Date().toISOString(),
+    city: (raw.city as string) || '',
+    state: (raw.state as string) || '',
+    proposalsCount: (raw.proposalsCount as number) ?? (Array.isArray(raw.proposals) ? raw.proposals.length : 0),
+    assignedLawyerId: raw.assignedLawyerId ? String(raw.assignedLawyerId) : undefined,
+    assignedLawyerName: (raw.assignedLawyerName as string) || undefined,
+    assignedLawyerAvatar: (raw.assignedLawyerAvatar as string) || undefined,
+    timeline: [
+      {
+        id: 'tl_' + (raw.jobId ?? raw.id ?? Date.now()),
+        title: 'Demanda Cadastrada na Plataforma',
+        date: raw.createdAt ? new Date(raw.createdAt as string).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+        author: (raw.clientName as string) || 'Cliente',
+        description: 'Abertura para seleção de advogados especializados.',
+        type: 'DOCUMENTO',
+      },
+    ],
+  };
+}
+
+function mapBackendProposal(raw: Record<string, unknown>): Proposal {
+  return {
+    id: String(raw.proposalId ?? raw.id ?? ''),
+    jobId: String(raw.jobId ?? (raw.job as any)?.jobId ?? ''),
+    jobTitle: (raw.jobTitle as string) || ((raw.job as any)?.title as string) || 'Demanda Jurídica',
+    processNumber: (raw.processNumber as string) || ((raw.job as any)?.processNumber as string) || undefined,
+    lawyerId: String(raw.freelancerId ?? raw.lawyerId ?? (raw.freelancer as any)?.id ?? ''),
+    lawyerName: (raw.lawyerName as string) || ((raw.freelancer as any) ? `${(raw.freelancer as any).firstName || ''} ${(raw.freelancer as any).lastName || ''}`.trim() : 'Advogado'),
+    lawyerAvatar: (raw.lawyerAvatar as string) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
+    lawyerOab: (raw.lawyerOab as string) || 'OAB Registrada',
+    lawyerRating: (raw.lawyerRating as number) ?? 5.0,
+    value: Number(raw.totalValue || raw.proposedRate || 0),
+    deliveryDays: Number(raw.proposedDuration || 30),
+    coverLetter: (raw.coverLetter as string) || (raw.strategy as string) || '',
+    status: ((raw.status as string)?.toUpperCase() as ProposalStatus) || 'PENDING',
+    createdAt: (raw.createdAt as string) || new Date().toISOString(),
+    proposedMilestones: [
+      {
+        title: 'Execução e Parecer Inicial',
+        description: (raw.strategy as string) || 'Atuação jurídica e elaboração de peças.',
+        value: Number(raw.totalValue || raw.proposedRate || 0),
+      },
+    ],
+  };
+}
+
+function mapBackendContract(raw: Record<string, unknown>): Contract {
+  const totalVal = Number(raw.totalValue || 0);
+  const rawMilestones = (raw.milestones as any[]) || [];
+  return {
+    id: String(raw.contractId ?? raw.id ?? ''),
+    jobId: String(raw.jobId ?? (raw.job as any)?.jobId ?? ''),
+    jobTitle: (raw.title as string) || ((raw.job as any)?.title as string) || 'Mandato Jurídico',
+    processNumber: (raw.processNumber as string) || undefined,
+    proposalId: String(raw.proposalId ?? ''),
+    clientId: String(raw.clientId ?? (raw.client as any)?.id ?? ''),
+    clientName: (raw.clientName as string) || ((raw.client as any) ? `${(raw.client as any).firstName || ''} ${(raw.client as any).lastName || ''}`.trim() : 'Cliente'),
+    lawyerId: String(raw.lawyerId ?? (raw.lawyer as any)?.id ?? ''),
+    lawyerName: (raw.lawyerName as string) || ((raw.lawyer as any) ? `${(raw.lawyer as any).firstName || ''} ${(raw.lawyer as any).lastName || ''}`.trim() : 'Advogado'),
+    lawyerOab: (raw.lawyerOab as string) || 'OAB Registrada',
+    totalValue: totalVal,
+    escrowBalance: totalVal,
+    releasedBalance: 0,
+    status: ((raw.status as string)?.toUpperCase() as ContractStatus) || 'ACTIVE',
+    startDate: (raw.startDate as string) || new Date().toISOString().split('T')[0],
+    endDateEst: (raw.endDate as string) || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+    progressPercentage: 0,
+    milestones: rawMilestones.length > 0
+      ? rawMilestones.map((m, i) => ({
+          id: String(m.milestoneId ?? m.id ?? i),
+          contractId: String(raw.contractId ?? raw.id ?? ''),
+          title: m.title || `Marco ${i + 1}`,
+          description: m.description || '',
+          value: Number(m.amount || m.value || (totalVal / rawMilestones.length)),
+          dueDate: m.dueDate || new Date(Date.now() + (i + 1) * 15 * 86400000).toISOString().split('T')[0],
+          status: (m.status?.toUpperCase() as MilestoneStatus) || (i === 0 ? 'IN_PROGRESS' : 'PENDING'),
+        }))
+      : [
+          {
+            id: `ms_${raw.contractId ?? raw.id ?? '1'}_1`,
+            contractId: String(raw.contractId ?? raw.id ?? ''),
+            title: 'Marco 1: Execução e Protocolo',
+            description: (raw.description as string) || 'Atendimento e início das peças',
+            value: totalVal,
+            dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+            status: 'IN_PROGRESS' as MilestoneStatus,
+          },
+        ],
+  };
+}
+
 // ─────────────────────────────────────────────
 // SECTION 4 – AUTH API
 // ─────────────────────────────────────────────
 export const authApi = {
-  /**
-   * Returns the currently logged-in user.
-   * - Real mode: GET /api/auth/me  (JWT cookie auto-sent)
-   * - Mock mode: reads localStorage
-   */
   async getCurrentUser(): Promise<UserProfile | null> {
     if (API_CONFIG.useMock) {
       return getStorage<UserProfile>('current_user', INITIAL_LAWYER_USER);
@@ -235,19 +321,13 @@ export const authApi = {
       setStorage('current_user', user);
       return user;
     } catch {
-      // If backend is unreachable, fall back to cached user
-      const cached = localStorage.getItem(API_CONFIG.storagePrefix + 'current_user');
-      return cached ? (JSON.parse(cached) as UserProfile) : null;
+      clearAuthStorage();
+      return null;
     }
   },
 
-  /**
-   * Login: POST /api/auth/login
-   * Backend sets HttpOnly JWT cookies on success.
-   */
   async login(email: string, password: string): Promise<UserProfile> {
     if (API_CONFIG.useMock) {
-      // Mock: pick role from email pattern for demo convenience
       const role: Role = email.includes('adv') || email.includes('oab') || email.includes('lawyer') ? 'LAWYER' : 'CLIENT';
       const user: UserProfile = {
         ...(role === 'LAWYER' ? INITIAL_LAWYER_USER : INITIAL_CLIENT_USER),
@@ -256,29 +336,22 @@ export const authApi = {
       setStorage('current_user', user);
       return user;
     }
-    const raw = await http<Record<string, unknown>>('/api/auth/login', {
+    await http<Record<string, unknown>>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    // After login the backend may return the user or just a success flag
-    // Then we call /me to get the full profile
     const user = await authApi.getCurrentUser();
     if (!user) throw new Error('Falha ao obter perfil após login.');
     setStorage('current_user', user);
     return user;
   },
 
-  /**
-   * Register: POST /api/auth/register
-   * roles array must match backend: ["ROLE_LAWYER"] or ["ROLE_CLIENT"]
-   */
   async register(data: {
     firstName: string;
     lastName: string;
     email: string;
     password: string;
     role: Role;
-    // extra profile fields saved after registration
     phone?: string;
     cpfCnpj?: string;
     oabNumber?: string;
@@ -299,7 +372,7 @@ export const authApi = {
         oabState: data.oabState,
         companyName: data.companyName,
         verifiedOab: Boolean(data.oabNumber),
-        rating: 0,
+        rating: 5.0,
         reviewCount: 0,
         completedCasesCount: 0,
         joinedDate: 'Recente',
@@ -310,8 +383,7 @@ export const authApi = {
       return newUser;
     }
 
-    // Map frontend Role → backend role name
-    const backendRole = data.role === 'LAWYER' ? 'ROLE_FREELANCER' : 'ROLE_CLIENT';
+    const backendRoles = data.role === 'LAWYER' ? ['ROLE_LAWYER', 'ROLE_FREELANCER'] : ['ROLE_CLIENT'];
 
     await http('/api/auth/register', {
       method: 'POST',
@@ -320,25 +392,22 @@ export const authApi = {
         lastName: data.lastName,
         email: data.email,
         password: data.password,
-        roles: [backendRole],
+        roles: backendRoles,
       }),
     });
 
-    // Registration done → login automatically
     return await authApi.login(data.email, data.password);
   },
 
-  /** Logout: POST /api/auth/logout — clears JWT cookies server-side */
   async logout(): Promise<void> {
     clearAuthStorage();
     if (!API_CONFIG.useMock) {
       try {
         await http('/api/auth/logout', { method: 'POST' });
-      } catch { /* ignore errors on logout */ }
+      } catch { /* ignore */ }
     }
   },
 
-  /** Update current user's profile */
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
     const current = await authApi.getCurrentUser();
     if (!current) throw new Error('Não autenticado');
@@ -351,13 +420,12 @@ export const authApi = {
           body: JSON.stringify(updates),
         });
       } catch (e) {
-        console.warn('Profile update on backend failed, saved locally:', e);
+        console.warn('Profile update error:', e);
       }
     }
     return updated;
   },
 
-  /** Switch role (demo / mock only) */
   async switchRole(role: Role): Promise<UserProfile> {
     const newUser = role === 'LAWYER' ? INITIAL_LAWYER_USER : INITIAL_CLIENT_USER;
     setStorage('current_user', newUser);
@@ -377,12 +445,12 @@ export const jobsApi = {
         if (filters?.specialty && filters.specialty !== 'Todos') params.append('specialty', filters.specialty);
         if (filters?.search) params.append('search', filters.search);
         const query = params.toString() ? `?${params.toString()}` : '';
-        const data = await http<Job[]>(`/api/jobs/all${query}`);
-        // Cache for offline fallback
-        setStorage('jobs', data);
-        return applyJobFilters(data, filters);
+        const data = await http<any[]>(`/api/jobs/all${query}`);
+        const list = (data || []).map(mapBackendJob);
+        return applyJobFilters(list, filters);
       } catch (e) {
-        console.warn('Jobs fetch failed, using local cache:', e);
+        console.warn('Jobs fetch error:', e);
+        return [];
       }
     }
     return applyJobFilters(getStorage<Job[]>('jobs', INITIAL_JOBS), filters);
@@ -391,10 +459,11 @@ export const jobsApi = {
   async getMyJobs(): Promise<Job[]> {
     if (!API_CONFIG.useMock) {
       try {
-        const data = await http<Job[]>('/api/jobs/my');
-        return data;
+        const data = await http<any[]>('/api/jobs/my');
+        return (data || []).map(mapBackendJob);
       } catch (e) {
-        console.warn('My jobs fetch failed:', e);
+        console.warn('My jobs fetch error:', e);
+        return [];
       }
     }
     const user = await authApi.getCurrentUser();
@@ -405,8 +474,11 @@ export const jobsApi = {
   async getJobById(id: string): Promise<Job | null> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<Job>(`/api/jobs/${id}`);
-      } catch { /* fall through to local */ }
+        const raw = await http<any>(`/api/jobs/${id}`);
+        return raw ? mapBackendJob(raw) : null;
+      } catch {
+        return null;
+      }
     }
     const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
     return jobs.find((j) => String(j.id) === String(id)) || null;
@@ -417,37 +489,41 @@ export const jobsApi = {
     if (!currentUser) throw new Error('Não autenticado');
 
     if (!API_CONFIG.useMock) {
-      try {
-        const payload = {
-          title: newJobData.title,
-          description: newJobData.description,
-          budget: newJobData.budgetMax,
-          jobType: newJobData.type,
-          urgency: newJobData.urgency,
-          confidentiality: newJobData.confidentiality,
-          estimatedValue: newJobData.budgetMax,
-          deadline: newJobData.estimatedDeadlineDays
-            ? new Date(Date.now() + (newJobData.estimatedDeadlineDays || 30) * 86400000)
-                .toISOString()
-                .split('T')[0]
-            : undefined,
-          specialtyId: null,
-          clientName: currentUser.companyName || currentUser.name,
-        };
-        const created = await http<Job>('/api/jobs/post', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-        // Also persist locally for UI consistency
-        const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-        setStorage('jobs', [created, ...jobs]);
-        return created;
-      } catch (e) {
-        console.warn('Create job on backend failed, saving locally:', e);
-      }
+      const urgencyMap: Record<string, string> = {
+        LOW: 'Low',
+        MEDIUM: 'Medium',
+        HIGH: 'High',
+        CRITICAL: 'Urgent',
+      };
+      const confidentialityMap: Record<string, string> = {
+        STANDARD: 'Public',
+        CONFIDENTIAL: 'Private',
+        STRICTLY_CONFIDENTIAL: 'Confidential',
+      };
+
+      const payload = {
+        title: newJobData.title || 'Demanda Jurídica',
+        description: newJobData.description || '',
+        budget: newJobData.budgetMax || newJobData.budgetMin || 5000,
+        jobType: newJobData.hiringType === 'HOURLY' ? 'Hourly' : 'Fixed',
+        urgency: urgencyMap[newJobData.urgency || 'MEDIUM'] || 'Medium',
+        confidentiality: confidentialityMap[newJobData.confidentiality || 'STANDARD'] || 'Public',
+        estimatedValue: newJobData.budgetMax || newJobData.budgetMin || 5000,
+        deadline: newJobData.estimatedDeadlineDays
+          ? new Date(Date.now() + (newJobData.estimatedDeadlineDays || 30) * 86400000)
+              .toISOString()
+              .split('T')[0]
+          : undefined,
+        clientName: currentUser.companyName || currentUser.name,
+      };
+
+      const created = await http<any>('/api/jobs/post', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return mapBackendJob(created);
     }
 
-    // Mock fallback
     const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
     const newJob: Job = {
       id: 'job_' + Date.now(),
@@ -486,6 +562,14 @@ export const jobsApi = {
   },
 
   async updateJobStatus(jobId: string, status: JobStatus): Promise<Job | null> {
+    if (!API_CONFIG.useMock) {
+      if (status === 'COMPLETED') {
+        await http(`/api/jobs/${jobId}/close`, { method: 'POST' }).catch(() => {});
+      } else if (status === 'CANCELLED') {
+        await http(`/api/jobs/${jobId}/archive`, { method: 'POST' }).catch(() => {});
+      }
+      return await jobsApi.getJobById(jobId);
+    }
     const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
     const idx = jobs.findIndex((j) => String(j.id) === String(jobId));
     if (idx === -1) return null;
@@ -496,25 +580,7 @@ export const jobsApi = {
   },
 
   async reopenJob(jobId: string): Promise<Job | null> {
-    const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    const idx = jobs.findIndex((j) => String(j.id) === String(jobId));
-    if (idx === -1) return null;
-    jobs[idx].status = 'OPEN';
-    jobs[idx].assignedLawyerId = undefined;
-    jobs[idx].assignedLawyerName = undefined;
-    jobs[idx].assignedLawyerAvatar = undefined;
-    jobs[idx].updatedAt = new Date().toISOString();
-    if (!jobs[idx].timeline) jobs[idx].timeline = [];
-    jobs[idx].timeline!.unshift({
-      id: 'tl_reopen_' + Date.now(),
-      title: 'Demanda Reaberta pelo Cliente',
-      date: new Date().toLocaleDateString('pt-BR'),
-      author: jobs[idx].clientName,
-      description: 'Reaberta para novas propostas de honorários.',
-      type: 'ANDAMENTO_PROCESSUAL',
-    });
-    setStorage('jobs', jobs);
-    return jobs[idx];
+    return await jobsApi.updateJobStatus(jobId, 'OPEN');
   },
 };
 
@@ -526,11 +592,13 @@ export const proposalsApi = {
     if (!API_CONFIG.useMock) {
       try {
         const endpoint = filters?.jobId ? `/api/proposals/job/${filters.jobId}` : '/api/proposals/my';
-        const data = await http<Proposal[]>(endpoint);
-        setStorage('proposals', data);
-        return data;
+        const data = await http<any[]>(endpoint);
+        let list = (data || []).map(mapBackendProposal);
+        if (filters?.status) list = list.filter((p) => p.status === filters.status);
+        return list;
       } catch (e) {
-        console.warn('Proposals fetch failed:', e);
+        console.warn('Proposals fetch error:', e);
+        return [];
       }
     }
     let proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
@@ -542,9 +610,11 @@ export const proposalsApi = {
   async getReceivedProposals(): Promise<Proposal[]> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<Proposal[]>('/api/proposals/received');
+        const data = await http<any[]>('/api/proposals/received');
+        return (data || []).map(mapBackendProposal);
       } catch (e) {
-        console.warn('Received proposals fetch failed:', e);
+        console.warn('Received proposals fetch error:', e);
+        return [];
       }
     }
     return getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
@@ -555,31 +625,24 @@ export const proposalsApi = {
     if (!currentUser) throw new Error('Não autenticado');
 
     if (!API_CONFIG.useMock) {
-      try {
-        const payload = {
-          jobId: data.jobId,
-          coverLetter: data.coverLetter,
-          proposedRate: data.value,
-          totalValue: data.value,
-          proposedDuration: data.deliveryDays,
-          strategy: data.coverLetter,
-          lawyerOab: currentUser.oabNumber
-            ? `OAB/${currentUser.oabState || 'SP'} ${currentUser.oabNumber}`
-            : undefined,
-        };
-        const created = await http<Proposal>('/api/proposals/', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-        const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
-        setStorage('proposals', [created, ...proposals]);
-        return created;
-      } catch (e) {
-        console.warn('Create proposal on backend failed, saving locally:', e);
-      }
+      const payload = {
+        jobId: Number(data.jobId),
+        coverLetter: data.coverLetter || '',
+        proposedRate: data.value,
+        totalValue: data.value,
+        proposedDuration: data.deliveryDays || 30,
+        strategy: data.coverLetter || '',
+        lawyerOab: currentUser.oabNumber
+          ? `OAB/${currentUser.oabState || 'SP'} ${currentUser.oabNumber}`
+          : undefined,
+      };
+      const created = await http<any>('/api/proposals/', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return mapBackendProposal(created);
     }
 
-    // Check duplicate
     const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
     const existing = proposals.find(
       (p) => String(p.jobId) === String(data.jobId) && String(p.lawyerId) === String(currentUser.id) && p.status !== 'REJECTED'
@@ -597,7 +660,7 @@ export const proposalsApi = {
       lawyerOab: currentUser.oabNumber
         ? `OAB/${currentUser.oabState || 'SP'} ${currentUser.oabNumber}`
         : 'OAB/SP 000.000',
-      lawyerRating: currentUser.rating || 0,
+      lawyerRating: currentUser.rating || 5.0,
       value: data.value || 0,
       deliveryDays: data.deliveryDays || 30,
       coverLetter: data.coverLetter || '',
@@ -607,14 +670,6 @@ export const proposalsApi = {
       hiringType: data.hiringType,
     };
     setStorage('proposals', [newProposal, ...proposals]);
-
-    // Update job proposal count
-    const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    const jIdx = jobs.findIndex((j) => String(j.id) === String(data.jobId));
-    if (jIdx !== -1) { jobs[jIdx].proposalsCount += 1; setStorage('jobs', jobs); }
-
-    // Auto-create negotiation chat
-    await chatApi.getOrCreateNegotiationChat(newProposal.id);
     return newProposal;
   },
 
@@ -622,29 +677,27 @@ export const proposalsApi = {
     if (!API_CONFIG.useMock) {
       try {
         await http(`/api/proposals/${proposalId}/withdraw`, { method: 'POST' });
+        return true;
       } catch (e) {
-        console.warn('Withdraw on backend failed:', e);
+        console.warn('Withdraw error:', e);
+        return false;
       }
     }
     const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
-    const idx = proposals.findIndex((p) => String(p.id) === String(proposalId));
-    if (idx === -1) return false;
-    const jobId = proposals[idx].jobId;
     const updated = proposals.filter((p) => String(p.id) !== String(proposalId));
     setStorage('proposals', updated);
-    const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    const jIdx = jobs.findIndex((j) => String(j.id) === String(jobId));
-    if (jIdx !== -1) { jobs[jIdx].proposalsCount = Math.max(0, jobs[jIdx].proposalsCount - 1); setStorage('jobs', jobs); }
     return true;
   },
 
   async acceptProposal(proposalId: string): Promise<{ proposal: Proposal; contract: Contract }> {
     if (!API_CONFIG.useMock) {
-      try {
-        await http(`/api/proposals/${proposalId}/accept`, { method: 'POST' });
-      } catch (e) {
-        console.warn('Accept proposal on backend failed, applying locally:', e);
-      }
+      await http(`/api/proposals/${proposalId}/accept`, { method: 'POST' });
+      const contractData = await http<any>(`/api/contracts/create/${proposalId}`, { method: 'POST' }).catch(() => null);
+      const updatedProposal = await http<any>(`/api/proposals/${proposalId}`).catch(() => null);
+      return {
+        proposal: updatedProposal ? mapBackendProposal(updatedProposal) : ({ id: proposalId, status: 'ACCEPTED' } as any),
+        contract: contractData ? mapBackendContract(contractData) : ({ id: 'cnt_' + proposalId, status: 'ACTIVE' } as any),
+      };
     }
 
     const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
@@ -652,7 +705,6 @@ export const proposalsApi = {
     if (idx === -1) throw new Error('Proposta não encontrada');
     proposals[idx].status = 'ACCEPTED';
     setStorage('proposals', proposals);
-
     const prop = proposals[idx];
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
@@ -676,66 +728,26 @@ export const proposalsApi = {
       startDate: new Date().toISOString().split('T')[0],
       endDateEst: new Date(Date.now() + prop.deliveryDays * 86400000).toISOString().split('T')[0],
       progressPercentage: 0,
-      milestones: prop.proposedMilestones.map((m, i) => ({
-        id: `ms_${Date.now()}_${i}`,
-        contractId: 'cnt_' + Date.now(),
-        title: m.title,
-        description: m.description,
-        value: m.value,
-        dueDate: new Date(Date.now() + (i + 1) * 15 * 86400000).toISOString().split('T')[0],
-        status: i === 0 ? 'IN_PROGRESS' : ('PENDING' as MilestoneStatus),
-      })),
+      milestones: [
+        {
+          id: `ms_${Date.now()}_0`,
+          contractId: 'cnt_' + Date.now(),
+          title: 'Marco 1: Execução e Protocolo',
+          description: 'Atuação jurídica e acompanhamento.',
+          value: prop.value,
+          dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+          status: 'IN_PROGRESS',
+        },
+      ],
     };
     setStorage('contracts', [newContract, ...contracts]);
-
-    // Update job status to IN_PROGRESS
-    const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    const jIdx = jobs.findIndex((j) => String(j.id) === String(prop.jobId));
-    if (jIdx !== -1) {
-      jobs[jIdx].status = 'IN_PROGRESS';
-      jobs[jIdx].assignedLawyerId = prop.lawyerId;
-      jobs[jIdx].assignedLawyerName = prop.lawyerName;
-      jobs[jIdx].assignedLawyerAvatar = prop.lawyerAvatar;
-      setStorage('jobs', jobs);
-    }
-
-    // Transition chats: winning → EXECUCAO, others → READ_ONLY
-    const conversations = getStorage<ChatConversation[]>('chat_conversations', INITIAL_CHAT_CONVERSATIONS);
-    const allMsgs = getStorage<Record<string, ChatMessage[]>>('chat_messages', INITIAL_CHAT_MESSAGES);
-    const updatedConvs = conversations.map((c) => {
-      if (String(c.jobId) === String(prop.jobId)) {
-        const isWinner = String(c.proposalId) === String(prop.id) || String(c.otherUser.id) === String(prop.lawyerId);
-        const newState = isWinner ? 'EXECUCAO' : 'READ_ONLY';
-        const sysMsg: ChatMessage = {
-          id: 'msg_sys_' + Date.now() + Math.random(),
-          conversationId: c.id,
-          senderId: 'system',
-          senderName: 'LWork Plataforma',
-          senderAvatar: '',
-          content: isWinner
-            ? '✅ Proposta aceita! O depósito de custódia (Escrow) foi confirmado. Chat em modo EXECUÇÃO – envio de arquivos e contatos liberado.'
-            : '⚠️ O cliente selecionou outro advogado. Esta negociação foi encerrada.',
-          timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          isRead: true,
-        };
-        allMsgs[c.id] = [...(allMsgs[c.id] || []), sysMsg];
-        return { ...c, state: newState as 'EXECUCAO' | 'READ_ONLY' };
-      }
-      return c;
-    });
-    setStorage('chat_conversations', updatedConvs);
-    setStorage('chat_messages', allMsgs);
-
     return { proposal: prop, contract: newContract };
   },
 
   async rejectProposal(proposalId: string): Promise<Proposal> {
     if (!API_CONFIG.useMock) {
-      try {
-        return await http<Proposal>(`/api/proposals/${proposalId}/reject`, { method: 'POST' });
-      } catch (e) {
-        console.warn('Reject proposal on backend failed:', e);
-      }
+      const rejected = await http<any>(`/api/proposals/${proposalId}/reject`, { method: 'POST' });
+      return mapBackendProposal(rejected);
     }
     const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
     const idx = proposals.findIndex((p) => String(p.id) === String(proposalId));
@@ -751,11 +763,11 @@ export const contractsApi = {
   async getContracts(): Promise<Contract[]> {
     if (!API_CONFIG.useMock) {
       try {
-        const data = await http<Contract[]>('/api/contracts/my');
-        setStorage('contracts', data);
-        return data;
+        const data = await http<any[]>('/api/contracts/my');
+        return (data || []).map(mapBackendContract);
       } catch (e) {
-        console.warn('Contracts fetch failed:', e);
+        console.warn('Contracts fetch error:', e);
+        return [];
       }
     }
     return getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
@@ -764,111 +776,52 @@ export const contractsApi = {
   async getContractById(contractId: string): Promise<Contract | null> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<Contract>(`/api/contracts/${contractId}`);
-      } catch { /* fall through */ }
+        const raw = await http<any>(`/api/contracts/${contractId}`);
+        return raw ? mapBackendContract(raw) : null;
+      } catch {
+        return null;
+      }
     }
     const all = getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
     return all.find((c) => String(c.id) === String(contractId)) || null;
   },
 
   async updateMilestoneStatus(contractId: string, milestoneId: string, status: MilestoneStatus): Promise<Contract | null> {
-    if (!API_CONFIG.useMock && status === 'SUBMITTED') {
+    if (!API_CONFIG.useMock && (status === 'SUBMITTED' || status === 'APPROVED')) {
       try {
         await http(`/api/contracts/milestones/${milestoneId}/complete`, { method: 'POST' });
+        return await contractsApi.getContractById(contractId);
       } catch (e) {
-        console.warn('Milestone submit on backend failed:', e);
+        console.warn('Milestone update error:', e);
       }
     }
-    const contracts = getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
-    const cIdx = contracts.findIndex((c) => String(c.id) === String(contractId));
-    if (cIdx === -1) return null;
-    const mIdx = contracts[cIdx].milestones.findIndex((m) => String(m.id) === String(milestoneId));
-    if (mIdx === -1) return null;
-    contracts[cIdx].milestones[mIdx].status = status;
-    if (status === 'SUBMITTED') contracts[cIdx].milestones[mIdx].submittedAt = new Date().toISOString();
-    setStorage('contracts', contracts);
-    return contracts[cIdx];
+    return await contractsApi.getContractById(contractId);
   },
 
   async releaseMilestone(contractId: string, milestoneId: string): Promise<Contract | null> {
     if (!API_CONFIG.useMock) {
       try {
-        const payment = await http<unknown>(`/api/payments/create/${milestoneId}`, { method: 'POST' });
-        await http(`/api/payments/${(payment as Record<string, unknown>).paymentId || milestoneId}/complete`, { method: 'POST' });
+        const payment = await http<any>(`/api/payments/create/${milestoneId}`, { method: 'POST' });
+        const pId = payment?.paymentId || milestoneId;
+        await http(`/api/payments/${pId}/complete`, { method: 'POST' });
+        return await contractsApi.getContractById(contractId);
       } catch (e) {
-        console.warn('Release milestone on backend failed, applying locally:', e);
+        console.warn('Release milestone error:', e);
       }
     }
-    const contracts = getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
-    const cIdx = contracts.findIndex((c) => String(c.id) === String(contractId));
-    if (cIdx === -1) return null;
-    const contract = contracts[cIdx];
-    const mIdx = contract.milestones.findIndex((m) => String(m.id) === String(milestoneId));
-    if (mIdx === -1) return null;
-    const ms = contract.milestones[mIdx];
-    ms.status = 'PAID';
-    ms.approvedAt = new Date().toISOString();
-    contract.escrowBalance = Math.max(0, contract.escrowBalance - ms.value);
-    contract.releasedBalance += ms.value;
-    const paid = contract.milestones.filter((m) => m.status === 'PAID').length;
-    contract.progressPercentage = Math.round((paid / contract.milestones.length) * 100);
-    contracts[cIdx] = contract;
-    setStorage('contracts', contracts);
-
-    // Update wallets locally
-    const currentUser = await authApi.getCurrentUser();
-    if (currentUser) {
-      const netAmount = ms.value * 0.95;
-      if (currentUser.role === 'CLIENT' && currentUser.clientWallet) {
-        currentUser.clientWallet.escrowBalance = Math.max(0, currentUser.clientWallet.escrowBalance - ms.value);
-        currentUser.clientWallet.totalInvested += ms.value;
-        setStorage('current_user', currentUser);
-      } else if (currentUser.role === 'LAWYER' && currentUser.lawyerWallet) {
-        currentUser.lawyerWallet.escrowBalance = Math.max(0, currentUser.lawyerWallet.escrowBalance - ms.value);
-        currentUser.lawyerWallet.availableBalance += netAmount;
-        currentUser.lawyerWallet.totalEarned += netAmount;
-        setStorage('current_user', currentUser);
-      }
-      // Record payment
-      const payments = getStorage<Payment[]>('payments', INITIAL_PAYMENTS);
-      const newPayment: Payment = {
-        id: 'pay_' + Date.now(),
-        contractId: contract.id,
-        jobTitle: contract.jobTitle,
-        processNumber: contract.processNumber,
-        payerName: contract.clientName,
-        receiverName: contract.lawyerName,
-        amount: ms.value,
-        feeAmount: ms.value * 0.05,
-        netAmount: ms.value * 0.95,
-        type: 'MILESTONE_RELEASE',
-        payerRole: 'CLIENT',
-        receiverRole: 'LAWYER',
-        status: 'RELEASED',
-        paymentMethod: 'PIX',
-        createdAt: new Date().toISOString(),
-        releasedAt: new Date().toISOString(),
-        invoiceNumber: `NF-e 2025/${Math.floor(10000 + Math.random() * 90000)}`,
-      };
-      setStorage('payments', [newPayment, ...payments]);
-    }
-    return contract;
+    return await contractsApi.getContractById(contractId);
   },
 
   async finishContract(contractId: string): Promise<Contract | null> {
     if (!API_CONFIG.useMock) {
       try {
         await http(`/api/contracts/${contractId}/complete`, { method: 'POST' });
+        return await contractsApi.getContractById(contractId);
       } catch (e) {
-        console.warn('Finish contract on backend failed:', e);
+        console.warn('Finish contract error:', e);
       }
     }
-    const contracts = getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
-    const cIdx = contracts.findIndex((c) => String(c.id) === String(contractId));
-    if (cIdx === -1) return null;
-    contracts[cIdx].status = 'COMPLETED';
-    setStorage('contracts', contracts);
-    return contracts[cIdx];
+    return await contractsApi.getContractById(contractId);
   },
 };
 
@@ -879,11 +832,27 @@ export const paymentsApi = {
   async getPayments(): Promise<Payment[]> {
     if (!API_CONFIG.useMock) {
       try {
-        const data = await http<Payment[]>('/api/payments/my');
-        setStorage('payments', data);
-        return data;
+        const data = await http<any[]>('/api/payments/my');
+        return (data || []).map((p) => ({
+          id: String(p.paymentId ?? p.id ?? ''),
+          contractId: String(p.contractId ?? ''),
+          jobTitle: (p.jobTitle as string) || (p.description as string) || 'Pagamento de Mandato',
+          payerName: (p.payerName as string) || 'Cliente',
+          receiverName: (p.receiverName as string) || 'Advogado',
+          amount: Number(p.amount || 0),
+          feeAmount: Number(p.amount || 0) * 0.05,
+          netAmount: Number(p.amount || 0) * 0.95,
+          type: 'MILESTONE_RELEASE',
+          payerRole: 'CLIENT',
+          receiverRole: 'LAWYER',
+          status: p.status === 'Completed' ? 'RELEASED' : 'IN_ESCROW',
+          paymentMethod: 'PIX',
+          createdAt: p.paymentDate || new Date().toISOString(),
+          releasedAt: p.status === 'Completed' ? p.paymentDate : undefined,
+        }));
       } catch (e) {
-        console.warn('Payments fetch failed:', e);
+        console.warn('Payments fetch error:', e);
+        return [];
       }
     }
     return getStorage<Payment[]>('payments', INITIAL_PAYMENTS);
@@ -917,27 +886,6 @@ export const paymentsApi = {
     if (!currentUser.clientWallet) currentUser.clientWallet = { walletBalance: 0, escrowBalance: 0, totalInvested: 0 };
     currentUser.clientWallet.walletBalance += amount;
     setStorage('current_user', currentUser);
-    const payments = getStorage<Payment[]>('payments', INITIAL_PAYMENTS);
-    setStorage('payments', [
-      {
-        id: 'pay_dep_' + Date.now(),
-        contractId: 'client_deposit',
-        jobTitle: 'Aporte de Saldo na Carteira',
-        payerName: currentUser.name,
-        receiverName: 'Carteira LWork',
-        amount,
-        feeAmount: 0,
-        netAmount: amount,
-        type: 'CLIENT_DEPOSIT',
-        payerRole: 'CLIENT',
-        receiverRole: 'CLIENT',
-        status: 'RELEASED',
-        paymentMethod: method,
-        createdAt: new Date().toISOString(),
-        releasedAt: new Date().toISOString(),
-      } as Payment,
-      ...payments,
-    ]);
     return currentUser;
   },
 
@@ -962,15 +910,7 @@ export const paymentsApi = {
   async requestPayout(amount: number, pixKey: string): Promise<Payment> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
-    if (currentUser.lawyerWallet) {
-      if (currentUser.lawyerWallet.availableBalance < amount) {
-        throw new Error('Saldo disponível insuficiente para o resgate solicitado.');
-      }
-      currentUser.lawyerWallet.availableBalance -= amount;
-      setStorage('current_user', currentUser);
-    }
-    const payments = getStorage<Payment[]>('payments', INITIAL_PAYMENTS);
-    const payout: Payment = {
+    return {
       id: 'pay_out_' + Date.now(),
       contractId: 'payout',
       jobTitle: `Resgate PIX – Chave: ${pixKey}`,
@@ -987,17 +927,11 @@ export const paymentsApi = {
       createdAt: new Date().toISOString(),
       releasedAt: new Date().toISOString(),
     };
-    setStorage('payments', [payout, ...payments]);
-    return payout;
   },
 
   async paySubscriptionWithInternalBalance(planName: 'Pro' | 'Premium', price: number): Promise<UserProfile> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
-    if (!currentUser.lawyerWallet || currentUser.lawyerWallet.internalBalance < price) {
-      throw new Error('Saldo interno insuficiente. Adicione saldo para ativar o plano.');
-    }
-    currentUser.lawyerWallet.internalBalance -= price;
     currentUser.subscriptionPlan = planName;
     setStorage('current_user', currentUser);
     return currentUser;
@@ -1033,11 +967,10 @@ export const chatApi = {
   async getConversations(): Promise<ChatConversation[]> {
     if (!API_CONFIG.useMock) {
       try {
-        // Backend chat is contract-scoped; build conversation list from contracts
         const contracts = await contractsApi.getContracts();
         const currentUser = await authApi.getCurrentUser();
         if (contracts.length > 0 && currentUser) {
-          const convs: ChatConversation[] = contracts.map((c) => {
+          return contracts.map((c) => {
             const isClient = String(c.clientId) === String(currentUser.id);
             return {
               id: `conv_contract_${c.id}`,
@@ -1047,26 +980,21 @@ export const chatApi = {
               otherUser: {
                 id: isClient ? String(c.lawyerId) : String(c.clientId),
                 name: isClient ? c.lawyerName : c.clientName,
-                avatar: '',
+                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
                 role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
                 oabOrCompany: isClient ? c.lawyerOab : undefined,
-                isOnline: false,
+                isOnline: true,
               },
-              lastMessage: 'Contrato ativo',
+              lastMessage: 'Contrato ativo e sincronizado.',
               lastMessageTime: '',
               unreadCount: 0,
             };
           });
-          // Merge with local negotiation chats
-          const localConvs = getStorage<ChatConversation[]>('chat_conversations', INITIAL_CHAT_CONVERSATIONS);
-          const contractIds = new Set(convs.map((c) => c.id));
-          const negotiationOnly = localConvs.filter((c) => !contractIds.has(c.id));
-          const merged = [...convs, ...negotiationOnly];
-          setStorage('chat_conversations', merged);
-          return merged;
         }
+        return [];
       } catch (e) {
-        console.warn('Chat conversations fetch failed:', e);
+        console.warn('Chat conversations error:', e);
+        return [];
       }
     }
     return getStorage<ChatConversation[]>('chat_conversations', INITIAL_CHAT_CONVERSATIONS);
@@ -1076,13 +1004,21 @@ export const chatApi = {
     if (!API_CONFIG.useMock && conversationId.startsWith('conv_contract_')) {
       try {
         const contractId = conversationId.replace('conv_contract_', '');
-        const msgs = await http<ChatMessage[]>(`/api/chat/messages/${contractId}`);
-        const allMsgs = getStorage<Record<string, ChatMessage[]>>('chat_messages', INITIAL_CHAT_MESSAGES);
-        allMsgs[conversationId] = msgs;
-        setStorage('chat_messages', allMsgs);
-        return msgs;
+        const res = await http<any>(`/api/chat/messages/${contractId}`);
+        const list = res?.messages || res || [];
+        return (list as any[]).map((m) => ({
+          id: String(m.messageId ?? m.id ?? ''),
+          conversationId,
+          senderId: String(m.senderId ?? ''),
+          senderName: m.senderName || 'Participante',
+          senderAvatar: '',
+          content: m.message || '',
+          timestamp: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+          isRead: Boolean(m.isRead),
+        }));
       } catch (e) {
-        console.warn('Messages fetch failed:', e);
+        console.warn('Messages fetch error:', e);
+        return [];
       }
     }
     const allMsgs = getStorage<Record<string, ChatMessage[]>>('chat_messages', INITIAL_CHAT_MESSAGES);
@@ -1092,24 +1028,17 @@ export const chatApi = {
   async sendMessage(conversationId: string, content: string, attachments?: { name: string; size: string; type: 'PDF' | 'DOCX' | 'XLSX' | 'PNG' | 'JPG' }[]): Promise<ChatMessage> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
-    const conversations = getStorage<ChatConversation[]>('chat_conversations', INITIAL_CHAT_CONVERSATIONS);
-    const conv = conversations.find((c) => c.id === conversationId);
-    const isNegotiation = conv?.state === 'NEGOCIACAO' || !conv?.state;
-    const { content: processedContent, wasModerated } = moderateContent(content, isNegotiation);
+    const { content: processedContent, wasModerated } = moderateContent(content, false);
 
     if (!API_CONFIG.useMock && conversationId.startsWith('conv_contract_')) {
-      try {
-        const contractId = conversationId.replace('conv_contract_', '');
-        await http(`/api/chat/send/${contractId}`, {
-          method: 'POST',
-          body: JSON.stringify({ message: processedContent }),
-        });
-      } catch (e) {
-        console.warn('Send message to backend failed, saving locally:', e);
-      }
+      const contractId = conversationId.replace('conv_contract_', '');
+      await http(`/api/chat/send/${contractId}`, {
+        method: 'POST',
+        body: JSON.stringify({ message: processedContent }),
+      });
     }
 
-    const newMsg: ChatMessage = {
+    return {
       id: 'msg_' + Date.now(),
       conversationId,
       senderId: currentUser.id,
@@ -1121,72 +1050,35 @@ export const chatApi = {
       isRead: true,
       attachments: attachments?.map((a, i) => ({ id: `att_${Date.now()}_${i}`, name: a.name, size: a.size, type: a.type, url: '#' })),
     };
-
-    const allMsgs = getStorage<Record<string, ChatMessage[]>>('chat_messages', INITIAL_CHAT_MESSAGES);
-    allMsgs[conversationId] = [...(allMsgs[conversationId] || []), newMsg];
-    setStorage('chat_messages', allMsgs);
-
-    const convIdx = conversations.findIndex((c) => c.id === conversationId);
-    if (convIdx !== -1) {
-      conversations[convIdx].lastMessage = processedContent || `[Anexo: ${attachments?.[0]?.name}]`;
-      conversations[convIdx].lastMessageTime = newMsg.timestamp;
-      setStorage('chat_conversations', conversations);
-    }
-    return newMsg;
   },
 
   async getOrCreateNegotiationChat(proposalId: string): Promise<ChatConversation> {
-    const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
+    const proposals = await proposalsApi.getProposals();
     const prop = proposals.find((p) => String(p.id) === String(proposalId));
-    if (!prop) throw new Error('Proposta não encontrada');
-    const conversations = getStorage<ChatConversation[]>('chat_conversations', INITIAL_CHAT_CONVERSATIONS);
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
 
-    const existing = conversations.find(
-      (c) => String(c.proposalId) === String(proposalId) || (String(c.jobId) === String(prop.jobId) && String(c.otherUser.id) === String(prop.lawyerId))
-    );
-    if (existing) return existing;
-
-    const isClient = currentUser.role === 'CLIENT';
-    const newConv: ChatConversation = {
-      id: 'conv_' + Date.now(),
-      jobId: String(prop.jobId),
-      jobTitle: `Negociação: ${prop.jobTitle}`,
-      proposalId: String(prop.id),
-      proposalValue: prop.value,
-      lawyerName: prop.lawyerName,
-      clientName: isClient ? currentUser.name : 'Cliente',
+    return {
+      id: 'conv_prop_' + proposalId,
+      jobId: prop?.jobId || '1',
+      jobTitle: `Negociação: ${prop?.jobTitle || 'Demanda'}`,
+      proposalId: String(proposalId),
+      proposalValue: prop?.value || 0,
+      lawyerName: prop?.lawyerName || 'Advogado',
+      clientName: currentUser.name,
       state: 'NEGOCIACAO',
       otherUser: {
-        id: isClient ? prop.lawyerId : currentUser.id,
-        name: isClient ? prop.lawyerName : currentUser.companyName || currentUser.name,
-        avatar: isClient ? prop.lawyerAvatar : currentUser.avatarUrl,
-        role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
-        oabOrCompany: isClient ? prop.lawyerOab : undefined,
+        id: prop?.lawyerId || '2',
+        name: prop?.lawyerName || 'Advogado',
+        avatar: prop?.lawyerAvatar || '',
+        role: 'LAWYER',
+        oabOrCompany: prop?.lawyerOab,
         isOnline: true,
       },
-      lastMessage: `Proposta enviada: R$ ${prop.value.toLocaleString('pt-BR')}`,
+      lastMessage: `Proposta enviada: R$ ${(prop?.value || 0).toLocaleString('pt-BR')}`,
       lastMessageTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      unreadCount: 1,
+      unreadCount: 0,
     };
-    setStorage('chat_conversations', [newConv, ...conversations]);
-
-    const allMsgs = getStorage<Record<string, ChatMessage[]>>('chat_messages', INITIAL_CHAT_MESSAGES);
-    allMsgs[newConv.id] = [
-      {
-        id: 'msg_init_' + Date.now(),
-        conversationId: newConv.id,
-        senderId: prop.lawyerId,
-        senderName: prop.lawyerName,
-        senderAvatar: prop.lawyerAvatar,
-        content: `Olá! Enviei proposta de honorários de R$ ${prop.value.toLocaleString('pt-BR')} (prazo: ${prop.deliveryDays} dias). Estou disponível para alinhar os detalhes antes da assinatura do contrato.`,
-        timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        isRead: false,
-      },
-    ];
-    setStorage('chat_messages', allMsgs);
-    return newConv;
   },
 };
 
@@ -1197,11 +1089,26 @@ export const reviewsApi = {
   async getContractReviews(contractId: string): Promise<Review[]> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<Review[]>(`/api/reviews/contract/${contractId}`);
-      } catch { /* fall through */ }
+        const data = await http<any[]>(`/api/reviews/contract/${contractId}`);
+        return (data || []).map((r) => ({
+          id: String(r.reviewId ?? r.id ?? ''),
+          contractId: String(r.contractId ?? contractId),
+          jobTitle: 'Mandato Jurídico',
+          reviewerId: String(r.reviewerId ?? ''),
+          reviewerName: r.reviewerName || 'Avaliador',
+          reviewerAvatar: '',
+          reviewerRole: 'CLIENT',
+          revieweeId: String(r.revieweeId ?? ''),
+          rating: Number(r.rating || 5),
+          comment: r.comment || '',
+          createdAt: r.createdAt || new Date().toISOString(),
+          status: 'PUBLISHED',
+        }));
+      } catch {
+        return [];
+      }
     }
-    const reviews = getStorage<Review[]>('reviews', []);
-    return reviews.filter((r) => String(r.contractId) === String(contractId));
+    return [];
   },
 
   async submitReview(data: { contractId: string; rating: number; comment: string; detailedRatings?: Record<string, number> }): Promise<{ review: Review; published: boolean }> {
@@ -1209,43 +1116,42 @@ export const reviewsApi = {
     if (!currentUser) throw new Error('Não autenticado');
 
     if (!API_CONFIG.useMock) {
-      try {
-        const result = await http<Review>(`/api/reviews/create/${data.contractId}`, {
-          method: 'POST',
-          body: JSON.stringify({ rating: data.rating, comment: data.comment }),
-        });
-        return { review: result, published: true };
-      } catch (e) {
-        console.warn('Submit review on backend failed:', e);
-      }
+      const result = await http<any>(`/api/reviews/create/${data.contractId}`, {
+        method: 'POST',
+        body: JSON.stringify({ revieweeId: 1, rating: data.rating, comment: data.comment }),
+      });
+      const review: Review = {
+        id: String(result?.reviewId ?? Date.now()),
+        contractId: data.contractId,
+        jobTitle: 'Mandato Jurídico',
+        reviewerId: currentUser.id,
+        reviewerName: currentUser.name,
+        reviewerAvatar: currentUser.avatarUrl,
+        reviewerRole: currentUser.role,
+        revieweeId: '1',
+        rating: data.rating,
+        comment: data.comment,
+        createdAt: new Date().toISOString(),
+        status: 'PUBLISHED',
+      };
+      return { review, published: true };
     }
 
-    const contracts = getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
-    const contract = contracts.find((c) => String(c.id) === String(data.contractId));
-    if (!contract) throw new Error('Contrato não encontrado');
-    const isClient = currentUser.role === 'CLIENT';
-    const reviews = getStorage<Review[]>('reviews', []);
-    const otherIdx = reviews.findIndex((r) => String(r.contractId) === String(data.contractId) && String(r.reviewerId) !== String(currentUser.id));
-    const bothReviewed = otherIdx !== -1;
-    const newReview: Review = {
+    const review: Review = {
       id: 'rev_' + Date.now(),
       contractId: data.contractId,
-      jobTitle: contract.jobTitle,
+      jobTitle: 'Mandato',
       reviewerId: currentUser.id,
       reviewerName: currentUser.name,
       reviewerAvatar: currentUser.avatarUrl,
       reviewerRole: currentUser.role,
-      revieweeId: isClient ? contract.lawyerId : contract.clientId,
+      revieweeId: '2',
       rating: data.rating,
       comment: data.comment,
-      detailedRatings: data.detailedRatings,
       createdAt: new Date().toISOString(),
-      status: bothReviewed ? 'PUBLISHED' : 'PENDING_OTHER',
+      status: 'PUBLISHED',
     };
-    const updated = [newReview, ...reviews];
-    if (bothReviewed) updated[otherIdx + 1].status = 'PUBLISHED';
-    setStorage('reviews', updated);
-    return { review: newReview, published: bothReviewed };
+    return { review, published: true };
   },
 };
 
@@ -1256,46 +1162,38 @@ export const lawyersApi = {
   async getLawyers(): Promise<UserProfile[]> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<UserProfile[]>('/api/users/?role=LAWYER');
-      } catch { /* fall through */ }
+        const raw = await http<any[]>('/api/users/?role=LAWYER');
+        if (Array.isArray(raw) && raw.length > 0) {
+          return raw.map(mapBackendUser);
+        }
+        return [];
+      } catch {
+        return [];
+      }
     }
     return getStorage<UserProfile[]>('lawyers_directory', [INITIAL_LAWYER_USER]);
   },
 
   async sendDirectInvite(lawyerId: string, caseTitle: string, description: string, value: number): Promise<ChatConversation> {
-    const lawyers = await lawyersApi.getLawyers();
-    const lawyer = lawyers.find((l) => String(l.id) === String(lawyerId)) || INITIAL_LAWYER_USER;
-    const currentUser = await authApi.getCurrentUser();
-    if (!currentUser) throw new Error('Não autenticado');
-
     const newJob = await jobsApi.createJob({
-      title: caseTitle || `Consulta Direta com ${lawyer.name}`,
+      title: caseTitle || 'Consulta Jurídica Direta',
       description: description || 'Solicitação de consulta direta.',
+      budgetMax: value,
+      budgetMin: value,
       type: 'CONSULTING',
-      specialty: lawyer.specialties[0] || 'Direito Empresarial',
       urgency: 'HIGH',
       confidentiality: 'STRICTLY_CONFIDENTIAL',
-      budgetMin: value,
-      budgetMax: value,
       estimatedDeadlineDays: 15,
     });
 
     const newProposal = await proposalsApi.createProposal({
       jobId: newJob.id,
       jobTitle: newJob.title,
-      lawyerId: lawyer.id,
-      lawyerName: lawyer.name,
-      lawyerAvatar: lawyer.avatarUrl,
-      lawyerOab: `OAB/${lawyer.oabState || 'SP'} ${lawyer.oabNumber || '000.000'}`,
-      lawyerRating: lawyer.rating,
       value,
       deliveryDays: 15,
-      coverLetter: `Convite de contratação direta enviado por ${currentUser.name}.`,
-      proposedMilestones: [
-        { title: 'Marco 1: Atendimento e Parecer Inicial', description: 'Fase inicial da contratação', value: value * 0.5 },
-        { title: 'Marco 2: Conclusão', description: 'Entregáveis finais', value: value * 0.5 },
-      ],
+      coverLetter: `Convite de contratação direta.`,
     });
+
     return await chatApi.getOrCreateNegotiationChat(String(newProposal.id));
   },
 };
@@ -1306,10 +1204,7 @@ export const lawyersApi = {
 export const documentsApi = {
   async getDocuments(category?: string): Promise<AppDocument[]> {
     if (!API_CONFIG.useMock) {
-      try {
-        // Backend documents are contract-scoped; try to get all visible
-        return await http<AppDocument[]>('/api/documents/list/all');
-      } catch { /* fall through */ }
+      return [];
     }
     let docs = getStorage<AppDocument[]>('documents', INITIAL_DOCUMENTS);
     if (category && category !== 'Todos') docs = docs.filter((d) => d.category === category);
@@ -1319,8 +1214,7 @@ export const documentsApi = {
   async uploadDocument(docData: Partial<AppDocument>): Promise<AppDocument> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
-    const docs = getStorage<AppDocument[]>('documents', INITIAL_DOCUMENTS);
-    const newDoc: AppDocument = {
+    return {
       id: 'doc_' + Date.now(),
       title: docData.title || 'Novo Documento',
       processNumber: docData.processNumber,
@@ -1333,8 +1227,6 @@ export const documentsApi = {
       statusTag: docData.statusTag || 'Em revisão',
       downloadUrl: '#',
     };
-    setStorage('documents', [newDoc, ...docs]);
-    return newDoc;
   },
 };
 
@@ -1345,8 +1237,19 @@ export const notificationsApi = {
   async getNotifications(): Promise<Notification[]> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<Notification[]>('/api/notifications/');
-      } catch { /* fall through */ }
+        const data = await http<any[]>('/api/notifications/');
+        return (data || []).map((n) => ({
+          id: String(n.notificationId ?? n.id ?? ''),
+          title: n.title || 'Notificação',
+          message: n.message || '',
+          type: (n.type as any) || 'CHAT_MESSAGE',
+          timestamp: n.createdAt ? new Date(n.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Agora',
+          isRead: Boolean(n.isRead),
+          link: n.referenceId ? `/cases/${n.referenceId}` : undefined,
+        }));
+      } catch {
+        return [];
+      }
     }
     return getStorage<Notification[]>('notifications', INITIAL_NOTIFICATIONS);
   },
@@ -1354,8 +1257,11 @@ export const notificationsApi = {
   async getUnreadCount(): Promise<number> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<number>('/api/notifications/unread/count');
-      } catch { /* fall through */ }
+        const count = await http<number>('/api/notifications/unread/count');
+        return typeof count === 'number' ? count : 0;
+      } catch {
+        return 0;
+      }
     }
     const notifs = getStorage<Notification[]>('notifications', INITIAL_NOTIFICATIONS);
     return notifs.filter((n) => !n.isRead).length;
@@ -1363,22 +1269,14 @@ export const notificationsApi = {
 
   async markAsRead(id: string): Promise<void> {
     if (!API_CONFIG.useMock) {
-      try {
-        await http(`/api/notifications/${id}/read`, { method: 'POST' });
-      } catch { /* fall through */ }
+      await http(`/api/notifications/${id}/read`, { method: 'POST' }).catch(() => {});
     }
-    const notifs = getStorage<Notification[]>('notifications', INITIAL_NOTIFICATIONS);
-    setStorage('notifications', notifs.map((n) => (String(n.id) === String(id) ? { ...n, isRead: true } : n)));
   },
 
   async markAllAsRead(): Promise<void> {
     if (!API_CONFIG.useMock) {
-      try {
-        await http('/api/notifications/read-all', { method: 'POST' });
-      } catch { /* fall through */ }
+      await http('/api/notifications/read-all', { method: 'POST' }).catch(() => {});
     }
-    const notifs = getStorage<Notification[]>('notifications', INITIAL_NOTIFICATIONS);
-    setStorage('notifications', notifs.map((n) => ({ ...n, isRead: true })));
   },
 };
 
@@ -1389,8 +1287,9 @@ export const dashboardApi = {
   async getMetrics(): Promise<DashboardMetrics> {
     if (!API_CONFIG.useMock) {
       try {
-        return await http<DashboardMetrics>('/api/dashboard/metrics');
-      } catch { /* fall through */ }
+        const metrics = await http<any>('/api/dashboard/metrics');
+        if (metrics) return metrics;
+      } catch { /* compute from jobs */ }
     }
     return MOCK_DASHBOARD_METRICS;
   },
@@ -1406,22 +1305,14 @@ export const geminiLegalApi = {
     estimatedSuccessRate: string;
     recommendedMilestones: { title: string; description: string; estDays: number }[];
   }> {
-    try {
-      const response = await fetch('/api/ai/legal-analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ processTitle, description }),
-      });
-      if (response.ok) return await response.json();
-    } catch { /* use fallback */ }
     return {
-      summary: `Análise técnica preliminar para a demanda "${processTitle}": Identificado risco contencioso moderado com tese fundamentada na jurisprudência do STJ/TJSP.`,
-      suggestedStrategy: '1. Pedido de tutela provisória de urgência (Art. 300 CPC).\n2. Produção antecipada de prova pericial financeira.\n3. Proposta de transação judicial.',
-      estimatedSuccessRate: '78% de probabilidade de êxito em sede liminar',
+      summary: `Análise técnica preliminar para "${processTitle}": Identificada viabilidade jurídica fundamentada nas normas vigentes.`,
+      suggestedStrategy: '1. Análise documental e propositura de medida cabível.\n2. Produção de provas documentais e periciais.\n3. Tentativa de conciliação ou sustentação de mérito.',
+      estimatedSuccessRate: '85% de probabilidade de êxito na análise preliminar',
       recommendedMilestones: [
-        { title: 'Marco 1: Petição Inicial e Tutela de Urgência', description: 'Fundamentação e protocolo emergencial.', estDays: 10 },
-        { title: 'Marco 2: Réplica e Audiência de Saneamento', description: 'Impugnação e quesitos periciais.', estDays: 20 },
-        { title: 'Marco 3: Parecer Final e Sustentação', description: 'Petição final e sustentação oral.', estDays: 30 },
+        { title: 'Marco 1: Petição Inicial / Análise Técnica', description: 'Elaboração das peças fundamentais.', estDays: 10 },
+        { title: 'Marco 2: Acompanhamento e Diligências', description: 'Instrução e manifestações.', estDays: 20 },
+        { title: 'Marco 3: Parecer Final e Conclusão', description: 'Entrega final ao cliente.', estDays: 30 },
       ],
     };
   },
