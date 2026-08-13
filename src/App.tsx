@@ -57,7 +57,19 @@ const MainLayout: React.FC = () => {
   }, [user, loading, activeTab, setActiveTab]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-background">Loading...</div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background text-foreground">
+        <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shadow-sm">
+          <svg className="w-6 h-6 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0-3 9a5 5 0 006.5.5M6 7l3 9M6 7l6-2m6 2l3-1m-3 1-3 9a5 5 0 01-6.5.5M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5" />
+          </svg>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-6 h-6 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+          <p className="text-xs text-muted-foreground/70">Restaurando sessão…</p>
+        </div>
+      </div>
+    );
   }
 
   // Full-screen pages without main application sidebar
