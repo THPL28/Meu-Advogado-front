@@ -1,0 +1,8 @@
+{
+  "name": " Legal Work 1.2",
+  "description": "Plataforma jurídica de alta performance para advogados e clientes com gestão de casos, propostas, contratos, pagamentos em custódia, documentos e inteligência jurídica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-alt: var(--border-alt);
+  
+  --color-alt: var(--alt);
+  --color-alt-foreground: var(--alt-foreground);
+}
+
+@layer base {
+  :root {
+    --background: var(--color-slate-50);
+    --foreground: var(--color-slate-900);
+    
+    --card: var(--color-white);
+    --card-foreground: var(--color-slate-900);
+    
+    --muted: var(--color-slate-100);
+    --muted-foreground: var(--color-slate-700);
+    
+    --border: var(--color-slate-200);
+    --border-strong: var(--color-slate-300);
+    --border-alt: var(--color-slate-800);
+    
+    --alt: var(--color-slate-900);
+    --alt-foreground: var(--color-white);
+  }
+
+  .dark {
+    --background: #0F172A;
+    --foreground: #F8FAFC;
+    
+    --card: #1E293B;
+    --card-foreground: #F8FAFC;
+    
+    --muted: #0F172A;
+    --muted-foreground: #94A3B8;
+    
+    --border: #334155;
+    --border-strong: #475569;
+    --border-alt: #1E293B;
+    
+    --alt: #F8FAFC;
+    --alt-foreground: #0F172A;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Custom sleek scrollbar for enterprise feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
