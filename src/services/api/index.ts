@@ -173,7 +173,13 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
     let errMsg = `Erro ${res.status}`;
     try {
       const errBody = await res.json();
-      errMsg = errBody.error || errBody.message || errMsg;
+      if (Array.isArray(errBody.error)) {
+        errMsg = errBody.error.join(', ');
+      } else if (typeof errBody.error === 'string' && errBody.error) {
+        errMsg = errBody.error;
+      } else if (typeof errBody.message === 'string' && errBody.message) {
+        errMsg = errBody.message;
+      }
     } catch { /* ignore */ }
     throw new Error(errMsg);
   }
