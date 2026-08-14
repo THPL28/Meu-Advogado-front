@@ -120,6 +120,36 @@ export const CaseDetailPage: React.FC = () => {
 
   const job = jobs.find((j) => j.id === selectedCaseId) || jobs[0];
 
+  if (!job) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-200">
+        <div>
+          <button
+            onClick={() => setNavTab(role === 'LAWYER' ? 'find-jobs' : 'cases')}
+            className="inline-flex items-center gap-2 text-xs font-bold text-muted-foreground/90 hover:text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Voltar para {role === 'LAWYER' ? 'Encontrar Demandas' : 'Minhas Demandas'}</span>
+          </button>
+        </div>
+
+        <div className="bg-card border border-border/80 rounded-2xl sm:rounded-3xl p-12 text-center shadow-xs space-y-4 max-w-lg mx-auto">
+          <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto text-muted-foreground">
+            <Briefcase className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-foreground">Demanda não encontrada ou indisponível.</h2>
+          <p className="text-xs text-muted-foreground">A demanda solicitada não existe ou foi removida do sistema.</p>
+          <button
+            onClick={() => setNavTab(role === 'LAWYER' ? 'find-jobs' : 'cases')}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+          >
+            Voltar para {role === 'LAWYER' ? 'Demandas' : 'Painel de Casos'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   let caseProposals = proposals.filter((p) => p.jobId === job?.id);
   if (role === 'LAWYER' && user) {
     caseProposals = caseProposals.filter((p) => p.lawyerId === user.id);
@@ -824,11 +854,17 @@ export const CaseDetailPage: React.FC = () => {
             <div className="p-6 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
               <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">Advogado Responsável</h3>
               <div className="flex items-center gap-3">
-                <img
-                  src={job.assignedLawyerAvatar || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=256'}
-                  alt={job.assignedLawyerName}
-                  className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30"
-                />
+                {job.assignedLawyerAvatar ? (
+                  <img
+                    src={job.assignedLawyerAvatar}
+                    alt={job.assignedLawyerName}
+                    className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-sm ring-2 ring-emerald-500/30 shrink-0">
+                    {job.assignedLawyerName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <p className="text-sm font-bold text-foreground">{job.assignedLawyerName}</p>
                   <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">

@@ -39,19 +39,78 @@ import {
 export const ProfileEditPanel: React.FC = () => {
   const { lawyers, selectedLawyerSlug, updateLawyerProfile, setActiveTab, role, user, jobs } = useLegalPlatform();
 
-  const currentLawyer = lawyers.find(l => l.slug === selectedLawyerSlug) || lawyers[0];
+  const emptyLawyer: FullLawyerProfile = {
+    id: user?.id || '',
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    cpfCnpj: user?.cpfCnpj || '',
+    role: 'LAWYER',
+    slug: user?.name ? user.name.toLowerCase().replace(/\s+/g, '-') : '',
+    avatarUrl: user?.avatarUrl || '',
+    oabNumber: user?.oabNumber || '',
+    oabState: user?.oabState || 'SP',
+    verifiedOab: !!user?.verifiedOab,
+    city: user?.city || '',
+    state: user?.state || '',
+    country: 'Brasil',
+    primarySpecialty: user?.specialties?.[0] || 'Direito Geral',
+    bio: user?.bio || '',
+    hourlyRate: 250,
+    rating: user?.rating ?? 5.0,
+    reviewCount: 0,
+    completedCasesCount: 0,
+    successRate: 100,
+    onTimeDeliveryPercentage: 100,
+    avgDeliveryDays: 5,
+    avgContractValue: 2500,
+    totalClients: 0,
+    isOnline: true,
+    avgResponseTime: '< 2 horas',
+    joinedDate: user?.joinedDate || '2024',
+    specialties: user?.specialties || ['Direito Geral'],
+    specialtyDetails: [],
+    skills: [],
+    skillDetails: [],
+    education: [],
+    certificates: [],
+    languages: [],
+    workExperience: [],
+    portfolio: [],
+    completedProjectsHistory: [],
+    reviewsList: [],
+    serviceModalities: ['Atendimento Remoto'],
+    stats: {
+      totalContractsCount: 0,
+      totalEarned: 0,
+      activeProjectsCount: 0,
+      avgResponseMinutes: 30,
+      proposalTimeAvgHours: 2,
+      recurringClientPercentage: 0
+    },
+    socialLinks: { linkedin: '', website: '', instagram: '' },
+    availability: 'Disponível Imadiatamente'
+  };
+
+  const currentLawyer = lawyers.find(l => l.slug === selectedLawyerSlug || l.id === user?.id) || lawyers[0] || emptyLawyer;
 
   const [formData, setFormData] = useState<FullLawyerProfile>({ ...currentLawyer });
   const [activeTabSection, setActiveTabSection] = useState<'pessoal' | 'bio' | 'especialidades' | 'competencias' | 'formacao' | 'experiencia' | 'certificados' | 'idiomas' | 'portfolio' | 'redes' | 'disponibilidade'>('pessoal');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  const clientJobs = jobs.filter(j => j.clientName === user?.name);
+  const clientJobs = jobs.filter(j => j.clientName === user?.name || j.clientId === user?.id);
 
   if (role === 'CLIENT') {
     return (
       <div className="space-y-6 animate-in fade-in duration-200 text-foreground w-full max-w-5xl mx-auto">
         <div className="bg-card rounded-3xl p-6 sm:p-8 border border-border/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-6">
-          <img src={user?.avatarUrl} alt={user?.name} className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl object-cover ring-2 ring-emerald-500/30" />
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt={user?.name} className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl object-cover ring-2 ring-emerald-500/30" />
+          ) : (
+            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-3xl ring-2 ring-emerald-500/30">
+              {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
+            </div>
+          )}
           <div className="flex-1 text-center sm:text-left">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
               <h1 className="text-2xl font-extrabold text-foreground">{user?.name}</h1>
@@ -61,11 +120,11 @@ export const ProfileEditPanel: React.FC = () => {
                 </span>
               )}
             </div>
-            <p className="text-muted-foreground/90 font-medium">{user?.companyName ? 'Empresa' : 'Pessoa Física'} • {user?.city && user?.state ? `${user.city}, ${user.state} - Brasil` : 'São Paulo, SP - Brasil'}</p>
-            <p className="text-sm text-muted-foreground/90 mt-2">Membro desde Abril de 2024</p>
+            <p className="text-muted-foreground/90 font-medium">{user?.companyName ? 'Empresa' : 'Pessoa Física'} • {user?.city && user?.state ? `${user.city}, ${user.state} - Brasil` : 'Localização não informada'}</p>
+            <p className="text-sm text-muted-foreground/90 mt-2">Membro desde {user?.joinedDate || '2024'}</p>
             
             <div className="mt-4 text-sm text-muted-foreground/90 max-w-3xl leading-relaxed">
-              {user?.bio || 'Empresa de tecnologia buscando soluções jurídicas especializadas.'}
+              {user?.bio || 'Perfil de contratante verificado na plataforma.'}
             </div>
           </div>
         </div>
@@ -83,12 +142,12 @@ export const ProfileEditPanel: React.FC = () => {
           </div>
           <div className="bg-card p-5 rounded-2xl border border-border/80 shadow-xs flex flex-col items-center justify-center text-center">
             <Users className="w-6 h-6 text-emerald-600 mb-2" />
-            <p className="text-2xl font-extrabold text-foreground">3</p>
+            <p className="text-2xl font-extrabold text-foreground">{clientJobs.filter(j => j.assignedLawyerId).length}</p>
             <p className="text-xs text-muted-foreground/90 font-semibold uppercase tracking-wider">Advogados Contratados</p>
           </div>
           <div className="bg-card p-5 rounded-2xl border border-border/80 shadow-xs flex flex-col items-center justify-center text-center">
             <Clock className="w-6 h-6 text-emerald-600 mb-2" />
-            <p className="text-2xl font-extrabold text-foreground">24h</p>
+            <p className="text-2xl font-extrabold text-foreground">{clientJobs.length > 0 ? '24h' : 'N/A'}</p>
             <p className="text-xs text-muted-foreground/90 font-semibold uppercase tracking-wider">Tempo Médio de Contratação</p>
           </div>
         </div>

@@ -31,25 +31,25 @@ export const PaymentsPage: React.FC = () => {
 
   // Lawyer balances
   const lawyerWallet = user?.lawyerWallet || {
-    availableBalance: 14850.00,
-    escrowBalance: 32400.00,
-    internalBalance: 450.00,
-    totalEarned: 47250.00,
+    availableBalance: 0,
+    escrowBalance: 0,
+    internalBalance: 0,
+    totalEarned: 0,
     bankInfo: {
       pixKeyType: 'CPF',
-      pixKey: user?.cpfCnpj || '321.654.987-00',
-      bankName: 'Banco Itaú Unibanco S.A.',
+      pixKey: user?.cpfCnpj || '',
+      bankName: '',
       accountType: 'CORRENTE',
-      agency: '0382',
-      accountNumber: '49120-8'
+      agency: '',
+      accountNumber: ''
     }
   };
 
   // Client balances
   const clientWallet = user?.clientWallet || {
-    walletBalance: 25000.00,
-    escrowBalance: 32400.00,
-    totalInvested: 62000.00
+    walletBalance: 0,
+    escrowBalance: 0,
+    totalInvested: 0
   };
 
   const handleOpenContractDetails = (caseId: string) => {
@@ -156,35 +156,41 @@ export const PaymentsPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {contracts.filter(c => c.status === 'ACTIVE').map((contract) => (
-              <div key={contract.id} className="p-4 bg-background border border-border rounded-2xl space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold uppercase">
-                      Em Custódia
+          {contracts.filter(c => c.status === 'ACTIVE').length === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground/90 font-medium bg-background rounded-2xl border border-border">
+              Nenhum projeto ativo com saldo em custódia.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {contracts.filter(c => c.status === 'ACTIVE').map((contract) => (
+                <div key={contract.id} className="p-4 bg-background border border-border rounded-2xl space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold uppercase">
+                        Em Custódia
+                      </span>
+                      <h4 className="text-sm font-extrabold text-foreground mt-1">{contract.jobTitle}</h4>
+                      <p className="text-xs text-muted-foreground/90">Advogado: {contract.lawyerName}</p>
+                    </div>
+                    <span className="text-sm font-extrabold font-mono text-amber-600 dark:text-amber-400 shrink-0">
+                      R$ {contract.escrowBalance.toLocaleString('pt-BR')}
                     </span>
-                    <h4 className="text-sm font-extrabold text-foreground mt-1">{contract.jobTitle}</h4>
-                    <p className="text-xs text-muted-foreground/90">Advogado: {contract.lawyerName}</p>
                   </div>
-                  <span className="text-sm font-extrabold font-mono text-amber-600 dark:text-amber-400 shrink-0">
-                    R$ {contract.escrowBalance.toLocaleString('pt-BR')}
-                  </span>
-                </div>
 
-                <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground/90 font-medium">Progresso de Entregas: {contract.progressPercentage}%</span>
-                  <button
-                    onClick={() => handleOpenContractDetails(contract.jobId)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    Ver Marcos & Liberar
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+                  <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground/90 font-medium">Progresso de Entregas: {contract.progressPercentage}%</span>
+                    <button
+                      onClick={() => handleOpenContractDetails(contract.jobId)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      Ver Marcos & Liberar
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Client Transactions Extrato */}
@@ -209,32 +215,40 @@ export const PaymentsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50 text-xs text-muted-foreground">
-                {payments.map((p) => (
-                  <tr key={p.id} className="hover:bg-background/80 transition-colors">
-                    <td className="py-4 px-3 font-mono text-muted-foreground/90">
-                      {new Date(p.createdAt).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="py-4 px-3 font-semibold text-foreground">
-                      {p.jobTitle}
-                    </td>
-                    <td className="py-4 px-3 text-muted-foreground/90">
-                      {p.receiverName}
-                    </td>
-                    <td className="py-4 px-3 text-muted-foreground/90 font-mono">
-                      {p.paymentMethod}
-                    </td>
-                    <td className="py-4 px-3 text-right font-mono font-bold text-foreground">
-                      R$ {p.amount.toLocaleString('pt-BR')}
-                    </td>
-                    <td className="py-4 px-3 text-center">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        p.status === 'RELEASED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}>
-                        {p.status === 'RELEASED' ? 'Pago / Liberado' : 'Em Custódia Escrow'}
-                      </span>
+                {payments.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-xs text-muted-foreground/90 font-medium">
+                      Nenhum lançamento financeiro registrado até o momento.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  payments.map((p) => (
+                    <tr key={p.id} className="hover:bg-background/80 transition-colors">
+                      <td className="py-4 px-3 font-mono text-muted-foreground/90">
+                        {new Date(p.createdAt).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="py-4 px-3 font-semibold text-foreground">
+                        {p.jobTitle}
+                      </td>
+                      <td className="py-4 px-3 text-muted-foreground/90">
+                        {p.receiverName}
+                      </td>
+                      <td className="py-4 px-3 text-muted-foreground/90 font-mono">
+                        {p.paymentMethod}
+                      </td>
+                      <td className="py-4 px-3 text-right font-mono font-bold text-foreground">
+                        R$ {p.amount.toLocaleString('pt-BR')}
+                      </td>
+                      <td className="py-4 px-3 text-center">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          p.status === 'RELEASED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {p.status === 'RELEASED' ? 'Pago / Liberado' : 'Em Custódia Escrow'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -375,32 +389,40 @@ export const PaymentsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50 text-xs text-muted-foreground">
-              {payments.map((p) => (
-                <tr key={p.id} className="hover:bg-background/80 transition-colors">
-                  <td className="py-4 px-3 font-mono text-muted-foreground/90">
-                    {new Date(p.createdAt).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="py-4 px-3 font-semibold text-foreground">
-                    {p.jobTitle}
-                  </td>
-                  <td className="py-4 px-3 text-muted-foreground/90">
-                    {p.payerName}
-                  </td>
-                  <td className="py-4 px-3 text-muted-foreground/90 font-mono">
-                    {p.paymentMethod}
-                  </td>
-                  <td className="py-4 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    R$ {p.netAmount.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="py-4 px-3 text-center">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      p.status === 'RELEASED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                    }`}>
-                      {p.status === 'RELEASED' ? 'Liberado / Recebido' : 'Em Custódia Escrow'}
-                    </span>
+              {payments.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-xs text-muted-foreground/90 font-medium">
+                    Nenhum lançamento financeiro registrado até o momento.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                payments.map((p) => (
+                  <tr key={p.id} className="hover:bg-background/80 transition-colors">
+                    <td className="py-4 px-3 font-mono text-muted-foreground/90">
+                      {new Date(p.createdAt).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="py-4 px-3 font-semibold text-foreground">
+                      {p.jobTitle}
+                    </td>
+                    <td className="py-4 px-3 text-muted-foreground/90">
+                      {p.payerName}
+                    </td>
+                    <td className="py-4 px-3 text-muted-foreground/90 font-mono">
+                      {p.paymentMethod}
+                    </td>
+                    <td className="py-4 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      R$ {p.netAmount.toLocaleString('pt-BR')}
+                    </td>
+                    <td className="py-4 px-3 text-center">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        p.status === 'RELEASED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
+                        {p.status === 'RELEASED' ? 'Liberado / Recebido' : 'Em Custódia Escrow'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

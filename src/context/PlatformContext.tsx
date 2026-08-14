@@ -8,6 +8,7 @@ import {
   Notification,
   DashboardMetrics,
   FullLawyerProfile,
+  UserProfile,
   Role
 } from '../types';
 import {
@@ -19,9 +20,9 @@ import {
   notificationsApi,
   dashboardApi,
   chatApi,
+  lawyersApi,
   getStoredToken
 } from '../services/api';
-import { MOCK_LAWYERS } from '../services/mock/mockLawyers';
 
 export type ActiveTab = 
   | 'landing'
@@ -136,20 +137,57 @@ interface PlatformContextType {
 
 const PlatformContext = createContext<PlatformContextType | undefined>(undefined);
 
+const mapUserProfileToFullLawyer = (user: UserProfile): FullLawyerProfile => {
+  const slug = (user as any).slug || (user.name ? user.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : '') || `lawyer-${user.id}`;
+  return {
+    ...user,
+    slug,
+    primarySpecialty: (user as any).primarySpecialty || (user.specialties && user.specialties.length > 0 ? user.specialties[0] : 'Direito Geral'),
+    country: (user as any).country || 'Brasil',
+    availability: (user as any).availability || 'Disponível Imadiatamente',
+    avgResponseTime: (user as any).avgResponseTime || '< 30 minutos',
+    isOnline: (user as any).isOnline ?? true,
+    totalClients: (user as any).totalClients ?? user.completedCasesCount ?? 0,
+    successRate: (user as any).successRate ?? 98.0,
+    onTimeDeliveryPercentage: (user as any).onTimeDeliveryPercentage ?? 100,
+    avgDeliveryDays: (user as any).avgDeliveryDays ?? 5,
+    avgContractValue: (user as any).avgContractValue ?? 5000,
+    specialtyDetails: (user as any).specialtyDetails || [],
+    skillDetails: (user as any).skillDetails || [],
+    education: (user as any).education || [],
+    certificates: (user as any).certificates || [],
+    languages: (user as any).languages || [{ id: 'lang_1', language: 'Português', level: 'Nativo' }],
+    workExperience: (user as any).workExperience || [],
+    portfolio: (user as any).portfolio || [],
+    completedProjectsHistory: (user as any).completedProjectsHistory || [],
+    reviewsList: (user as any).reviewsList || [],
+    stats: (user as any).stats || {
+      totalContractsCount: user.completedCasesCount ?? 0,
+      totalEarned: user.lawyerWallet?.totalEarned ?? 0,
+      activeProjectsCount: 0,
+      avgResponseMinutes: 20,
+      proposalTimeAvgHours: 2.0,
+      recurringClientPercentage: 70
+    },
+    serviceModalities: (user as any).serviceModalities || ['Atendimento Remoto', 'Atendimento Presencial', 'Híbrido'],
+    socialLinks: (user as any).socialLinks || {}
+  };
+};
+
 export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>('job_101');
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [caseDetailInitialTab, setCaseDetailInitialTab] = useState<'OVERVIEW' | 'PROPOSALS' | 'DOCUMENTS' | 'CONTRACT'>('OVERVIEW');
-  const [selectedClientId, setSelectedClientId] = useState<string | null>('cli_1');
-  const [activeConversationId, setActiveConversationId] = useState<string | null>('conv_501');
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   
   // Sidebar & Layout State
   const [sidebarState, setSidebarState] = useState<SidebarState>('expanded');
   const [isChatExpanded, setIsChatExpanded] = useState<boolean>(false);
 
   // Lawyers state
-  const [lawyers, setLawyers] = useState<FullLawyerProfile[]>(MOCK_LAWYERS);
-  const [selectedLawyerSlug, setSelectedLawyerSlug] = useState<string>('dr-rodrigo-silveira');
+  const [lawyers, setLawyers] = useState<FullLawyerProfile[]>([]);
+  const [selectedLawyerSlug, setSelectedLawyerSlug] = useState<string>('');
 
   // Invite modal
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -245,7 +283,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (found) {
       setSelectedLawyerSlug(found.slug);
     } else {
-      setSelectedLawyerSlug('dr-rodrigo-silveira');
+      setSelectedLawyerSlug(lawyerIdOrSlug);
     }
     setActiveTab('profile');
   };
@@ -260,7 +298,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const openInviteModal = (lawyerIdOrSlug: string) => {
-    const found = lawyers.find(l => l.id === lawyerIdOrSlug || l.slug === lawyerIdOrSlug) || lawyers[0];
+    const found = lawyers.find(l => l.id === lawyerIdOrSlug || l.slug === lawyerIdOrSlug) || null;
     setSelectedLawyerForInvite(found);
     setIsInviteModalOpen(true);
   };
@@ -284,6 +322,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const refreshData = async () => {
     try {
+      const realLawyers = await lawyersApi.getLawyers().catch(() => []);
+      const mappedLawyers = realLawyers.map(mapUserProfileToFullLawyer);
+      setLawyers(mappedLawyers);
+
       const token = getStoredToken();
       if (token) {
         const [j, p, c, pay, d, n, m] = await Promise.all([
@@ -426,4 +468,3 @@ export const usePlatform = () => {
   if (!context) throw new Error('usePlatform must be used within PlatformProvider');
   return context;
 };
-

@@ -36,19 +36,6 @@ import {
   Review,
   ContractStatus,
 } from '../../types';
-import {
-  INITIAL_LAWYER_USER,
-  INITIAL_CLIENT_USER,
-  INITIAL_JOBS,
-  INITIAL_PROPOSALS,
-  INITIAL_CONTRACTS,
-  INITIAL_PAYMENTS,
-  INITIAL_CHAT_CONVERSATIONS,
-  INITIAL_CHAT_MESSAGES,
-  INITIAL_DOCUMENTS,
-  INITIAL_NOTIFICATIONS,
-  MOCK_DASHBOARD_METRICS,
-} from '../mock/mockData';
 
 // ─────────────────────────────────────────────
 // SECTION 1 – LOCAL STORAGE & TOKEN HELPERS
@@ -210,12 +197,12 @@ function mapBackendUser(raw: Record<string, unknown>): UserProfile {
     avatarUrl:
       (raw.photoUrl as string) ||
       (raw.avatarUrl as string) ||
-      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=256',
+      '',
     phone: (raw.phone as string) ?? '',
     cpfCnpj: (raw.cpfCnpj as string) ?? '',
     oabNumber: (raw.oabNumber as string) ?? undefined,
     oabState: (raw.oabState as string) ?? undefined,
-    bio: (raw.bio as string) ?? '',
+    bio: (raw.bio as string) ?? (raw.description as string) ?? '',
     specialties: (raw.specialties as string[]) ?? [],
     skills: (raw.skills as string[]) ?? [],
     hourlyRate: (raw.hourlyRate as number) ?? undefined,
@@ -223,7 +210,7 @@ function mapBackendUser(raw: Record<string, unknown>): UserProfile {
     reviewCount: (raw.reviewCount as number) ?? 0,
     completedCasesCount: (raw.completedCasesCount as number) ?? 0,
     verifiedOab: Boolean(raw.verifiedOab ?? (raw.oabNumber ? true : false)),
-    city: (raw.city as string) ?? '',
+    city: (raw.city as string) ?? (raw.location as string) ?? '',
     state: (raw.state as string) ?? '',
     joinedDate: raw.createdAt
       ? new Date(raw.createdAt as string).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
@@ -259,7 +246,7 @@ function mapBackendJob(raw: Record<string, unknown>): Job {
     processNumber: (raw.processNumber as string) || undefined,
     clientId: String(raw.clientId ?? (raw.client as any)?.id ?? ''),
     clientName: (raw.clientName as string) || ((raw.client as any) ? `${(raw.client as any).firstName || ''} ${(raw.client as any).lastName || ''}`.trim() : 'Cliente'),
-    clientAvatar: (raw.clientAvatar as string) || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=256',
+    clientAvatar: (raw.clientAvatar as string) || (raw.client as any)?.photoUrl || (raw.client as any)?.avatarUrl || '',
     type: ((raw.jobType as string)?.toUpperCase() as any) || 'LITIGATION',
     specialty: (raw.specialtyName as string) || ((raw.specialty as any)?.name as string) || 'Direito Empresarial',
     status: ((raw.status as string)?.toUpperCase() as JobStatus) || 'OPEN',
@@ -275,7 +262,7 @@ function mapBackendJob(raw: Record<string, unknown>): Job {
     proposalsCount: (raw.proposalsCount as number) ?? (Array.isArray(raw.proposals) ? raw.proposals.length : 0),
     assignedLawyerId: raw.assignedLawyerId ? String(raw.assignedLawyerId) : undefined,
     assignedLawyerName: (raw.assignedLawyerName as string) || undefined,
-    assignedLawyerAvatar: (raw.assignedLawyerAvatar as string) || undefined,
+    assignedLawyerAvatar: (raw.assignedLawyerAvatar as string) || (raw.assignedLawyer as any)?.photoUrl || (raw.assignedLawyer as any)?.avatarUrl || undefined,
     timeline: [
       {
         id: 'tl_' + (raw.jobId ?? raw.id ?? Date.now()),
@@ -297,7 +284,7 @@ function mapBackendProposal(raw: Record<string, unknown>): Proposal {
     processNumber: (raw.processNumber as string) || ((raw.job as any)?.processNumber as string) || undefined,
     lawyerId: String(raw.freelancerId ?? raw.lawyerId ?? (raw.freelancer as any)?.id ?? ''),
     lawyerName: (raw.lawyerName as string) || ((raw.freelancer as any) ? `${(raw.freelancer as any).firstName || ''} ${(raw.freelancer as any).lastName || ''}`.trim() : 'Advogado'),
-    lawyerAvatar: (raw.lawyerAvatar as string) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
+    lawyerAvatar: (raw.lawyerAvatar as string) || (raw.freelancer as any)?.photoUrl || (raw.lawyer as any)?.photoUrl || '',
     lawyerOab: (raw.lawyerOab as string) || 'OAB Registrada',
     lawyerRating: (raw.lawyerRating as number) ?? 5.0,
     value: Number(raw.totalValue || raw.proposedRate || 0),
@@ -365,9 +352,6 @@ function mapBackendContract(raw: Record<string, unknown>): Contract {
 // ─────────────────────────────────────────────
 export const authApi = {
   async getCurrentUser(): Promise<UserProfile | null> {
-    if (API_CONFIG.useMock) {
-      return getStorage<UserProfile>('current_user', INITIAL_LAWYER_USER);
-    }
     try {
       const raw = await http<Record<string, unknown>>('/api/auth/me');
       const user = mapBackendUser(raw);
@@ -380,15 +364,6 @@ export const authApi = {
   },
 
   async login(email: string, password: string): Promise<UserProfile> {
-    if (API_CONFIG.useMock) {
-      const role: Role = email.includes('adv') || email.includes('oab') || email.includes('lawyer') ? 'LAWYER' : 'CLIENT';
-      const user: UserProfile = {
-        ...(role === 'LAWYER' ? INITIAL_LAWYER_USER : INITIAL_CLIENT_USER),
-        email,
-      };
-      setStorage('current_user', user);
-      return user;
-    }
     const resData = await http<any>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -419,31 +394,6 @@ export const authApi = {
     oabState?: string;
     companyName?: string;
   }): Promise<UserProfile> {
-    if (API_CONFIG.useMock) {
-      const base = data.role === 'LAWYER' ? INITIAL_LAWYER_USER : INITIAL_CLIENT_USER;
-      const newUser: UserProfile = {
-        ...base,
-        id: 'usr_' + Date.now(),
-        name: `${data.firstName} ${data.lastName}`.trim(),
-        email: data.email,
-        role: data.role,
-        phone: data.phone || '',
-        cpfCnpj: data.cpfCnpj || '',
-        oabNumber: data.oabNumber,
-        oabState: data.oabState,
-        companyName: data.companyName,
-        verifiedOab: Boolean(data.oabNumber),
-        rating: 5.0,
-        reviewCount: 0,
-        completedCasesCount: 0,
-        joinedDate: 'Recente',
-        specialties: [],
-        skills: [],
-      };
-      setStorage('current_user', newUser);
-      return newUser;
-    }
-
     const backendRoles = data.role === 'LAWYER' ? ['ROLE_LAWYER', 'ROLE_FREELANCER'] : ['ROLE_CLIENT'];
 
     await http('/api/auth/register', {
@@ -475,11 +425,9 @@ export const authApi = {
 
   async logout(): Promise<void> {
     clearAuthStorage();
-    if (!API_CONFIG.useMock) {
-      try {
-        await http('/api/auth/logout', { method: 'POST' });
-      } catch { /* ignore */ }
-    }
+    try {
+      await http('/api/auth/logout', { method: 'POST' });
+    } catch { /* ignore */ }
   },
 
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
@@ -487,23 +435,52 @@ export const authApi = {
     if (!current) throw new Error('Não autenticado');
     const updated = { ...current, ...updates };
     setStorage('current_user', updated);
-    if (!API_CONFIG.useMock) {
-      try {
-        await http(`/api/users/profile/me`, {
-          method: 'PUT',
-          body: JSON.stringify(updates),
-        });
-      } catch (e) {
-        console.warn('Profile update error:', e);
+
+    // Extract firstName and lastName from current user or name
+    let firstName = (updates as any).firstName;
+    let lastName = (updates as any).lastName;
+    if (!firstName && !lastName) {
+      if (current.name) {
+        const parts = current.name.trim().split(/\s+/);
+        firstName = parts[0] || 'Usuário';
+        lastName = parts.slice(1).join(' ') || parts[0] || 'LegaWork';
+      } else {
+        firstName = 'Usuário';
+        lastName = 'LegaWork';
       }
+    }
+
+    const payload: Record<string, any> = {
+      ...updates,
+      firstName: firstName || 'Usuário',
+      lastName: lastName || 'LegaWork',
+    };
+
+    try {
+      const res = await http<any>(`/api/users/profile/me`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      if (res) {
+        const serverUpdated = mapBackendUser(res);
+        const merged = { ...updated, ...serverUpdated };
+        setStorage('current_user', merged);
+        return merged;
+      }
+    } catch (e) {
+      console.warn('Profile update error:', e);
     }
     return updated;
   },
 
   async switchRole(role: Role): Promise<UserProfile> {
-    const newUser = role === 'LAWYER' ? INITIAL_LAWYER_USER : INITIAL_CLIENT_USER;
-    setStorage('current_user', newUser);
-    return newUser;
+    const current = await authApi.getCurrentUser();
+    if (current) {
+      const updated: UserProfile = { ...current, role };
+      setStorage('current_user', updated);
+      return updated;
+    }
+    throw new Error('Não autenticado');
   },
 };
 
@@ -512,145 +489,86 @@ export const authApi = {
 // ─────────────────────────────────────────────
 export const jobsApi = {
   async getJobs(filters?: { status?: JobStatus; specialty?: string; search?: string }): Promise<Job[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const params = new URLSearchParams();
-        if (filters?.status) params.append('status', filters.status);
-        if (filters?.specialty && filters.specialty !== 'Todos') params.append('specialty', filters.specialty);
-        if (filters?.search) params.append('search', filters.search);
-        const query = params.toString() ? `?${params.toString()}` : '';
-        const data = await http<any[]>(`/api/jobs/all${query}`);
-        const list = (data || []).map(mapBackendJob);
-        return applyJobFilters(list, filters);
-      } catch (e) {
-        console.warn('Jobs fetch error:', e);
-        return [];
-      }
+    try {
+      const params = new URLSearchParams();
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.specialty && filters.specialty !== 'Todos') params.append('specialty', filters.specialty);
+      if (filters?.search) params.append('search', filters.search);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const data = await http<any[]>(`/api/jobs/all${query}`);
+      const list = (Array.isArray(data) ? data : []).map(mapBackendJob);
+      return applyJobFilters(list, filters);
+    } catch (e) {
+      console.warn('Jobs fetch error:', e);
+      return [];
     }
-    return applyJobFilters(getStorage<Job[]>('jobs', INITIAL_JOBS), filters);
   },
 
   async getMyJobs(): Promise<Job[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const data = await http<any[]>('/api/jobs/my');
-        return (data || []).map(mapBackendJob);
-      } catch (e) {
-        console.warn('My jobs fetch error:', e);
-        return [];
-      }
+    try {
+      const data = await http<any[]>('/api/jobs/my');
+      return (Array.isArray(data) ? data : []).map(mapBackendJob);
+    } catch (e) {
+      console.warn('My jobs fetch error:', e);
+      return [];
     }
-    const user = await authApi.getCurrentUser();
-    const all = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    return all.filter((j) => String(j.clientId) === String(user?.id));
   },
 
   async getJobById(id: string): Promise<Job | null> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const raw = await http<any>(`/api/jobs/${id}`);
-        return raw ? mapBackendJob(raw) : null;
-      } catch {
-        return null;
-      }
+    try {
+      const raw = await http<any>(`/api/jobs/${id}`);
+      return raw ? mapBackendJob(raw) : null;
+    } catch {
+      return null;
     }
-    const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    return jobs.find((j) => String(j.id) === String(id)) || null;
   },
 
   async createJob(newJobData: Partial<Job>): Promise<Job> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
 
-    if (!API_CONFIG.useMock) {
-      const urgencyMap: Record<string, string> = {
-        LOW: 'Low',
-        MEDIUM: 'Medium',
-        HIGH: 'High',
-        CRITICAL: 'Urgent',
-      };
-      const confidentialityMap: Record<string, string> = {
-        STANDARD: 'Public',
-        CONFIDENTIAL: 'Private',
-        STRICTLY_CONFIDENTIAL: 'Confidential',
-      };
-
-      const payload = {
-        title: newJobData.title || 'Demanda Jurídica',
-        description: newJobData.description || '',
-        budget: newJobData.budgetMax || newJobData.budgetMin || 5000,
-        jobType: newJobData.hiringType === 'HOURLY' ? 'Hourly' : 'Fixed',
-        urgency: urgencyMap[newJobData.urgency || 'MEDIUM'] || 'Medium',
-        confidentiality: confidentialityMap[newJobData.confidentiality || 'STANDARD'] || 'Public',
-        estimatedValue: newJobData.budgetMax || newJobData.budgetMin || 5000,
-        deadline: newJobData.estimatedDeadlineDays
-          ? new Date(Date.now() + (newJobData.estimatedDeadlineDays || 30) * 86400000)
-              .toISOString()
-              .split('T')[0]
-          : undefined,
-        clientName: currentUser.companyName || currentUser.name,
-      };
-
-      const created = await http<any>('/api/jobs/post', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      return mapBackendJob(created);
-    }
-
-    const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    const newJob: Job = {
-      id: 'job_' + Date.now(),
-      processNumber: newJobData.processNumber,
-      title: newJobData.title || 'Nova Demanda Jurídica',
-      description: newJobData.description || '',
-      clientId: currentUser.id,
-      clientName: currentUser.companyName || currentUser.name,
-      clientAvatar: currentUser.avatarUrl,
-      type: newJobData.type || 'LITIGATION',
-      specialty: newJobData.specialty || 'Direito Empresarial',
-      status: 'OPEN',
-      urgency: newJobData.urgency || 'MEDIUM',
-      confidentiality: newJobData.confidentiality || 'STANDARD',
-      budgetMin: newJobData.budgetMin || 5000,
-      budgetMax: newJobData.budgetMax || 10000,
-      estimatedDeadlineDays: newJobData.estimatedDeadlineDays || 30,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      city: newJobData.city || currentUser.city,
-      state: newJobData.state || currentUser.state,
-      proposalsCount: 0,
-      timeline: [
-        {
-          id: 'tl_' + Date.now(),
-          title: 'Demanda Cadastrada na Plataforma',
-          date: new Date().toLocaleDateString('pt-BR'),
-          author: currentUser.name,
-          description: 'Abertura para seleção de advogados especializados.',
-          type: 'DOCUMENTO',
-        },
-      ],
+    const urgencyMap: Record<string, string> = {
+      LOW: 'Low',
+      MEDIUM: 'Medium',
+      HIGH: 'High',
+      CRITICAL: 'Urgent',
     };
-    setStorage('jobs', [newJob, ...jobs]);
-    return newJob;
+    const confidentialityMap: Record<string, string> = {
+      STANDARD: 'Public',
+      CONFIDENTIAL: 'Private',
+      STRICTLY_CONFIDENTIAL: 'Confidential',
+    };
+
+    const payload = {
+      title: newJobData.title || 'Demanda Jurídica',
+      description: newJobData.description || '',
+      budget: newJobData.budgetMax || newJobData.budgetMin || 5000,
+      jobType: newJobData.hiringType === 'HOURLY' ? 'Hourly' : 'Fixed',
+      urgency: urgencyMap[newJobData.urgency || 'MEDIUM'] || 'Medium',
+      confidentiality: confidentialityMap[newJobData.confidentiality || 'STANDARD'] || 'Public',
+      estimatedValue: newJobData.budgetMax || newJobData.budgetMin || 5000,
+      deadline: newJobData.estimatedDeadlineDays
+        ? new Date(Date.now() + (newJobData.estimatedDeadlineDays || 30) * 86400000)
+            .toISOString()
+            .split('T')[0]
+        : undefined,
+      clientName: currentUser.companyName || currentUser.name,
+    };
+
+    const created = await http<any>('/api/jobs/post', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return mapBackendJob(created);
   },
 
   async updateJobStatus(jobId: string, status: JobStatus): Promise<Job | null> {
-    if (!API_CONFIG.useMock) {
-      if (status === 'COMPLETED') {
-        await http(`/api/jobs/${jobId}/close`, { method: 'POST' }).catch(() => {});
-      } else if (status === 'CANCELLED') {
-        await http(`/api/jobs/${jobId}/archive`, { method: 'POST' }).catch(() => {});
-      }
-      return await jobsApi.getJobById(jobId);
+    if (status === 'COMPLETED') {
+      await http(`/api/jobs/${jobId}/close`, { method: 'POST' }).catch(() => {});
+    } else if (status === 'CANCELLED') {
+      await http(`/api/jobs/${jobId}/archive`, { method: 'POST' }).catch(() => {});
     }
-    const jobs = getStorage<Job[]>('jobs', INITIAL_JOBS);
-    const idx = jobs.findIndex((j) => String(j.id) === String(jobId));
-    if (idx === -1) return null;
-    jobs[idx].status = status;
-    jobs[idx].updatedAt = new Date().toISOString();
-    setStorage('jobs', jobs);
-    return jobs[idx];
+    return await jobsApi.getJobById(jobId);
   },
 
   async reopenJob(jobId: string): Promise<Job | null> {
@@ -663,170 +581,73 @@ export const jobsApi = {
 // ─────────────────────────────────────────────
 export const proposalsApi = {
   async getProposals(filters?: { jobId?: string; status?: ProposalStatus }): Promise<Proposal[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const endpoint = filters?.jobId ? `/api/proposals/job/${filters.jobId}` : '/api/proposals/my';
-        const data = await http<any[]>(endpoint);
-        let list = (data || []).map(mapBackendProposal);
-        if (filters?.status) list = list.filter((p) => p.status === filters.status);
-        return list;
-      } catch (e) {
-        console.warn('Proposals fetch error:', e);
-        return [];
-      }
+    try {
+      const endpoint = filters?.jobId ? `/api/proposals/job/${filters.jobId}` : '/api/proposals/my';
+      const data = await http<any[]>(endpoint);
+      let list = (Array.isArray(data) ? data : []).map(mapBackendProposal);
+      if (filters?.status) list = list.filter((p) => p.status === filters.status);
+      return list;
+    } catch (e) {
+      console.warn('Proposals fetch error:', e);
+      return [];
     }
-    let proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
-    if (filters?.jobId) proposals = proposals.filter((p) => String(p.jobId) === String(filters.jobId));
-    if (filters?.status) proposals = proposals.filter((p) => p.status === filters.status);
-    return proposals;
   },
 
   async getReceivedProposals(): Promise<Proposal[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const data = await http<any[]>('/api/proposals/received');
-        return (data || []).map(mapBackendProposal);
-      } catch (e) {
-        console.warn('Received proposals fetch error:', e);
-        return [];
-      }
+    try {
+      const data = await http<any[]>('/api/proposals/received');
+      return (Array.isArray(data) ? data : []).map(mapBackendProposal);
+    } catch (e) {
+      console.warn('Received proposals fetch error:', e);
+      return [];
     }
-    return getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
   },
 
   async createProposal(data: Partial<Proposal>): Promise<Proposal> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
 
-    if (!API_CONFIG.useMock) {
-      const payload = {
-        jobId: Number(data.jobId),
-        coverLetter: data.coverLetter || '',
-        proposedRate: data.value,
-        totalValue: data.value,
-        proposedDuration: data.deliveryDays || 30,
-        strategy: data.coverLetter || '',
-        lawyerOab: currentUser.oabNumber
-          ? `OAB/${currentUser.oabState || 'SP'} ${currentUser.oabNumber}`
-          : undefined,
-      };
-      const created = await http<any>('/api/proposals/', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      return mapBackendProposal(created);
-    }
-
-    const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
-    const existing = proposals.find(
-      (p) => String(p.jobId) === String(data.jobId) && String(p.lawyerId) === String(currentUser.id) && p.status !== 'REJECTED'
-    );
-    if (existing) throw new Error('Você já enviou uma proposta para esta demanda.');
-
-    const newProposal: Proposal = {
-      id: 'prop_' + Date.now(),
-      jobId: data.jobId || '',
-      jobTitle: data.jobTitle || '',
-      processNumber: data.processNumber,
-      lawyerId: currentUser.id,
-      lawyerName: currentUser.name,
-      lawyerAvatar: currentUser.avatarUrl,
+    const payload = {
+      jobId: Number(data.jobId),
+      coverLetter: data.coverLetter || '',
+      proposedRate: data.value,
+      totalValue: data.value,
+      proposedDuration: data.deliveryDays || 30,
+      strategy: data.coverLetter || '',
       lawyerOab: currentUser.oabNumber
         ? `OAB/${currentUser.oabState || 'SP'} ${currentUser.oabNumber}`
-        : 'OAB/SP 000.000',
-      lawyerRating: currentUser.rating || 5.0,
-      value: data.value || 0,
-      deliveryDays: data.deliveryDays || 30,
-      coverLetter: data.coverLetter || '',
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-      proposedMilestones: data.proposedMilestones || [],
-      hiringType: data.hiringType,
+        : undefined,
     };
-    setStorage('proposals', [newProposal, ...proposals]);
-    return newProposal;
+    const created = await http<any>('/api/proposals/', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return mapBackendProposal(created);
   },
 
   async withdrawProposal(proposalId: string): Promise<boolean> {
-    if (!API_CONFIG.useMock) {
-      try {
-        await http(`/api/proposals/${proposalId}/withdraw`, { method: 'POST' });
-        return true;
-      } catch (e) {
-        console.warn('Withdraw error:', e);
-        return false;
-      }
+    try {
+      await http(`/api/proposals/${proposalId}/withdraw`, { method: 'POST' });
+      return true;
+    } catch (e) {
+      console.warn('Withdraw error:', e);
+      return false;
     }
-    const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
-    const updated = proposals.filter((p) => String(p.id) !== String(proposalId));
-    setStorage('proposals', updated);
-    return true;
   },
 
   async acceptProposal(proposalId: string): Promise<{ proposal: Proposal; contract: Contract }> {
-    if (!API_CONFIG.useMock) {
-      await http(`/api/proposals/${proposalId}/accept`, { method: 'POST' });
-      const contractData = await http<any>(`/api/contracts/create/${proposalId}`, { method: 'POST' }).catch(() => null);
-      const updatedProposal = await http<any>(`/api/proposals/${proposalId}`).catch(() => null);
-      return {
-        proposal: updatedProposal ? mapBackendProposal(updatedProposal) : ({ id: proposalId, status: 'ACCEPTED' } as any),
-        contract: contractData ? mapBackendContract(contractData) : ({ id: 'cnt_' + proposalId, status: 'ACTIVE' } as any),
-      };
-    }
-
-    const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
-    const idx = proposals.findIndex((p) => String(p.id) === String(proposalId));
-    if (idx === -1) throw new Error('Proposta não encontrada');
-    proposals[idx].status = 'ACCEPTED';
-    setStorage('proposals', proposals);
-    const prop = proposals[idx];
-    const currentUser = await authApi.getCurrentUser();
-    if (!currentUser) throw new Error('Não autenticado');
-
-    const contracts = getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
-    const newContract: Contract = {
-      id: 'cnt_' + Date.now(),
-      jobId: prop.jobId,
-      jobTitle: prop.jobTitle,
-      processNumber: prop.processNumber,
-      proposalId: prop.id,
-      clientId: currentUser.id,
-      clientName: currentUser.companyName || currentUser.name,
-      lawyerId: prop.lawyerId,
-      lawyerName: prop.lawyerName,
-      lawyerOab: prop.lawyerOab,
-      totalValue: prop.value,
-      escrowBalance: prop.value,
-      releasedBalance: 0,
-      status: 'ACTIVE',
-      startDate: new Date().toISOString().split('T')[0],
-      endDateEst: new Date(Date.now() + prop.deliveryDays * 86400000).toISOString().split('T')[0],
-      progressPercentage: 0,
-      milestones: [
-        {
-          id: `ms_${Date.now()}_0`,
-          contractId: 'cnt_' + Date.now(),
-          title: 'Marco 1: Execução e Protocolo',
-          description: 'Atuação jurídica e acompanhamento.',
-          value: prop.value,
-          dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
-          status: 'IN_PROGRESS',
-        },
-      ],
+    await http(`/api/proposals/${proposalId}/accept`, { method: 'POST' });
+    const contractData = await http<any>(`/api/contracts/create/${proposalId}`, { method: 'POST' }).catch(() => null);
+    const updatedProposal = await http<any>(`/api/proposals/${proposalId}`).catch(() => null);
+    return {
+      proposal: updatedProposal ? mapBackendProposal(updatedProposal) : ({ id: proposalId, status: 'ACCEPTED' } as any),
+      contract: contractData ? mapBackendContract(contractData) : ({ id: 'cnt_' + proposalId, status: 'ACTIVE' } as any),
     };
-    setStorage('contracts', [newContract, ...contracts]);
-    return { proposal: prop, contract: newContract };
   },
 
   async rejectProposal(proposalId: string): Promise<Proposal> {
-    if (!API_CONFIG.useMock) {
-      const rejected = await http<any>(`/api/proposals/${proposalId}/reject`, { method: 'POST' });
-      return mapBackendProposal(rejected);
-    }
-    const proposals = getStorage<Proposal[]>('proposals', INITIAL_PROPOSALS);
-    const idx = proposals.findIndex((p) => String(p.id) === String(proposalId));
-    if (idx !== -1) { proposals[idx].status = 'REJECTED'; setStorage('proposals', proposals); }
-    return proposals[idx];
+    const rejected = await http<any>(`/api/proposals/${proposalId}/reject`, { method: 'POST' });
+    return mapBackendProposal(rejected);
   },
 };
 
@@ -835,33 +656,26 @@ export const proposalsApi = {
 // ─────────────────────────────────────────────
 export const contractsApi = {
   async getContracts(): Promise<Contract[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const data = await http<any[]>('/api/contracts/my');
-        return (data || []).map(mapBackendContract);
-      } catch (e) {
-        console.warn('Contracts fetch error:', e);
-        return [];
-      }
+    try {
+      const data = await http<any[]>('/api/contracts/my');
+      return (Array.isArray(data) ? data : []).map(mapBackendContract);
+    } catch (e) {
+      console.warn('Contracts fetch error:', e);
+      return [];
     }
-    return getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
   },
 
   async getContractById(contractId: string): Promise<Contract | null> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const raw = await http<any>(`/api/contracts/${contractId}`);
-        return raw ? mapBackendContract(raw) : null;
-      } catch {
-        return null;
-      }
+    try {
+      const raw = await http<any>(`/api/contracts/${contractId}`);
+      return raw ? mapBackendContract(raw) : null;
+    } catch {
+      return null;
     }
-    const all = getStorage<Contract[]>('contracts', INITIAL_CONTRACTS);
-    return all.find((c) => String(c.id) === String(contractId)) || null;
   },
 
   async updateMilestoneStatus(contractId: string, milestoneId: string, status: MilestoneStatus): Promise<Contract | null> {
-    if (!API_CONFIG.useMock && (status === 'SUBMITTED' || status === 'APPROVED')) {
+    if (status === 'SUBMITTED' || status === 'APPROVED') {
       try {
         await http(`/api/contracts/milestones/${milestoneId}/complete`, { method: 'POST' });
         return await contractsApi.getContractById(contractId);
@@ -873,27 +687,23 @@ export const contractsApi = {
   },
 
   async releaseMilestone(contractId: string, milestoneId: string): Promise<Contract | null> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const payment = await http<any>(`/api/payments/create/${milestoneId}`, { method: 'POST' });
-        const pId = payment?.paymentId || milestoneId;
-        await http(`/api/payments/${pId}/complete`, { method: 'POST' });
-        return await contractsApi.getContractById(contractId);
-      } catch (e) {
-        console.warn('Release milestone error:', e);
-      }
+    try {
+      const payment = await http<any>(`/api/payments/create/${milestoneId}`, { method: 'POST' });
+      const pId = payment?.paymentId || milestoneId;
+      await http(`/api/payments/${pId}/complete`, { method: 'POST' });
+      return await contractsApi.getContractById(contractId);
+    } catch (e) {
+      console.warn('Release milestone error:', e);
     }
     return await contractsApi.getContractById(contractId);
   },
 
   async finishContract(contractId: string): Promise<Contract | null> {
-    if (!API_CONFIG.useMock) {
-      try {
-        await http(`/api/contracts/${contractId}/complete`, { method: 'POST' });
-        return await contractsApi.getContractById(contractId);
-      } catch (e) {
-        console.warn('Finish contract error:', e);
-      }
+    try {
+      await http(`/api/contracts/${contractId}/complete`, { method: 'POST' });
+      return await contractsApi.getContractById(contractId);
+    } catch (e) {
+      console.warn('Finish contract error:', e);
     }
     return await contractsApi.getContractById(contractId);
   },
@@ -904,57 +714,54 @@ export const contractsApi = {
 // ─────────────────────────────────────────────
 export const paymentsApi = {
   async getPayments(): Promise<Payment[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const data = await http<any[]>('/api/payments/my');
-        return (data || []).map((p) => ({
-          id: String(p.paymentId ?? p.id ?? ''),
-          contractId: String(p.contractId ?? ''),
-          jobTitle: (p.jobTitle as string) || (p.description as string) || 'Pagamento de Mandato',
-          payerName: (p.payerName as string) || 'Cliente',
-          receiverName: (p.receiverName as string) || 'Advogado',
-          amount: Number(p.amount || 0),
-          feeAmount: Number(p.amount || 0) * 0.05,
-          netAmount: Number(p.amount || 0) * 0.95,
-          type: 'MILESTONE_RELEASE',
-          payerRole: 'CLIENT',
-          receiverRole: 'LAWYER',
-          status: p.status === 'Completed' ? 'RELEASED' : 'IN_ESCROW',
-          paymentMethod: 'PIX',
-          createdAt: p.paymentDate || new Date().toISOString(),
-          releasedAt: p.status === 'Completed' ? p.paymentDate : undefined,
-        }));
-      } catch (e) {
-        console.warn('Payments fetch error:', e);
-        return [];
-      }
+    try {
+      const data = await http<any[]>('/api/payments/my');
+      return (Array.isArray(data) ? data : []).map((p) => ({
+        id: String(p.paymentId ?? p.id ?? ''),
+        contractId: String(p.contractId ?? ''),
+        jobTitle: (p.jobTitle as string) || (p.description as string) || 'Pagamento de Mandato',
+        payerName: (p.payerName as string) || 'Cliente',
+        receiverName: (p.receiverName as string) || 'Advogado',
+        amount: Number(p.amount || 0),
+        feeAmount: Number(p.amount || 0) * 0.05,
+        netAmount: Number(p.amount || 0) * 0.95,
+        type: 'MILESTONE_RELEASE',
+        payerRole: 'CLIENT',
+        receiverRole: 'LAWYER',
+        status: p.status === 'Completed' ? 'RELEASED' : 'IN_ESCROW',
+        paymentMethod: 'PIX',
+        createdAt: p.paymentDate || new Date().toISOString(),
+        releasedAt: p.status === 'Completed' ? p.paymentDate : undefined,
+      }));
+    } catch (e) {
+      console.warn('Payments fetch error:', e);
+      return [];
     }
-    return getStorage<Payment[]>('payments', INITIAL_PAYMENTS);
   },
 
   async getFinancialSummary(): Promise<{ availableBalance: number; escrowBalance: number; totalEarned: number; internalBalance: number; walletBalance?: number }> {
     const user = await authApi.getCurrentUser();
     if (user?.role === 'LAWYER' && user.lawyerWallet) {
       return {
-        availableBalance: user.lawyerWallet.availableBalance,
-        escrowBalance: user.lawyerWallet.escrowBalance,
-        totalEarned: user.lawyerWallet.totalEarned,
-        internalBalance: user.lawyerWallet.internalBalance,
+        availableBalance: user.lawyerWallet.availableBalance || 0,
+        escrowBalance: user.lawyerWallet.escrowBalance || 0,
+        totalEarned: user.lawyerWallet.totalEarned || 0,
+        internalBalance: user.lawyerWallet.internalBalance || 0,
       };
     }
     if (user?.role === 'CLIENT' && user.clientWallet) {
       return {
-        availableBalance: user.clientWallet.walletBalance,
-        escrowBalance: user.clientWallet.escrowBalance,
-        totalEarned: user.clientWallet.totalInvested,
+        availableBalance: user.clientWallet.walletBalance || 0,
+        escrowBalance: user.clientWallet.escrowBalance || 0,
+        totalEarned: user.clientWallet.totalInvested || 0,
         internalBalance: 0,
-        walletBalance: user.clientWallet.walletBalance,
+        walletBalance: user.clientWallet.walletBalance || 0,
       };
     }
     return { availableBalance: 0, escrowBalance: 0, totalEarned: 0, internalBalance: 0 };
   },
 
-  async depositClientBalance(amount: number, method: 'PIX' | 'CARTAO_CREDITO' | 'BOLETO'): Promise<UserProfile> {
+  async depositClientBalance(amount: number, _method: 'PIX' | 'CARTAO_CREDITO' | 'BOLETO'): Promise<UserProfile> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
     if (!currentUser.clientWallet) currentUser.clientWallet = { walletBalance: 0, escrowBalance: 0, totalInvested: 0 };
@@ -963,7 +770,7 @@ export const paymentsApi = {
     return currentUser;
   },
 
-  async depositLawyerInternalBalance(amount: number, method: 'PIX' | 'CARTAO_CREDITO' | 'BOLETO'): Promise<UserProfile> {
+  async depositLawyerInternalBalance(amount: number, _method: 'PIX' | 'CARTAO_CREDITO' | 'BOLETO'): Promise<UserProfile> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
     if (!currentUser.lawyerWallet) currentUser.lawyerWallet = { availableBalance: 0, escrowBalance: 0, internalBalance: 0, totalEarned: 0 };
@@ -1003,7 +810,7 @@ export const paymentsApi = {
     };
   },
 
-  async paySubscriptionWithInternalBalance(planName: 'Pro' | 'Premium', price: number): Promise<UserProfile> {
+  async paySubscriptionWithInternalBalance(planName: 'Pro' | 'Premium', _price: number): Promise<UserProfile> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
     currentUser.subscriptionPlan = planName;
@@ -1039,64 +846,63 @@ export function moderateContent(text: string, isNegotiation: boolean): { content
 // ─────────────────────────────────────────────
 export const chatApi = {
   async getConversations(): Promise<ChatConversation[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const contracts = await contractsApi.getContracts();
-        const currentUser = await authApi.getCurrentUser();
-        if (contracts.length > 0 && currentUser) {
-          return contracts.map((c) => {
-            const isClient = String(c.clientId) === String(currentUser.id);
-            return {
-              id: `conv_contract_${c.id}`,
-              jobId: String(c.jobId),
-              jobTitle: c.jobTitle,
-              state: 'EXECUCAO' as const,
-              otherUser: {
-                id: isClient ? String(c.lawyerId) : String(c.clientId),
-                name: isClient ? c.lawyerName : c.clientName,
-                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
-                role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
-                oabOrCompany: isClient ? c.lawyerOab : undefined,
-                isOnline: true,
-              },
-              lastMessage: 'Contrato ativo e sincronizado.',
-              lastMessageTime: '',
-              unreadCount: 0,
-            };
-          });
-        }
-        return [];
-      } catch (e) {
-        console.warn('Chat conversations error:', e);
-        return [];
+    try {
+      const contracts = await contractsApi.getContracts();
+      const currentUser = await authApi.getCurrentUser();
+      if (contracts.length > 0 && currentUser) {
+        return contracts.map((c) => {
+          const isClient = String(c.clientId) === String(currentUser.id);
+          return {
+            id: `conv_contract_${c.id}`,
+            jobId: String(c.jobId),
+            jobTitle: c.jobTitle,
+            state: 'EXECUCAO' as const,
+            otherUser: {
+              id: isClient ? String(c.lawyerId) : String(c.clientId),
+              name: isClient ? c.lawyerName : c.clientName,
+              avatar: '',
+              role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
+              oabOrCompany: isClient ? c.lawyerOab : undefined,
+              isOnline: false,
+            },
+            lastMessage: 'Contrato ativo e sincronizado.',
+            lastMessageTime: '',
+            unreadCount: 0,
+          };
+        });
       }
+      return [];
+    } catch (e) {
+      console.warn('Chat conversations error:', e);
+      return [];
     }
-    return getStorage<ChatConversation[]>('chat_conversations', INITIAL_CHAT_CONVERSATIONS);
   },
 
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
-    if (!API_CONFIG.useMock && conversationId.startsWith('conv_contract_')) {
+    if (conversationId && conversationId.startsWith('conv_contract_')) {
       try {
         const contractId = conversationId.replace('conv_contract_', '');
         const res = await http<any>(`/api/chat/messages/${contractId}`);
         const list = res?.messages || res || [];
-        return (list as any[]).map((m) => ({
-          id: String(m.messageId ?? m.id ?? ''),
-          conversationId,
-          senderId: String(m.senderId ?? ''),
-          senderName: m.senderName || 'Participante',
-          senderAvatar: '',
-          content: m.message || '',
-          timestamp: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-          isRead: Boolean(m.isRead),
-        }));
+        if (Array.isArray(list)) {
+          return list.map((m) => ({
+            id: String(m.messageId ?? m.id ?? ''),
+            conversationId,
+            senderId: String(m.senderId ?? ''),
+            senderName: m.senderName || 'Participante',
+            senderAvatar: '',
+            content: m.message || m.content || '',
+            timestamp: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+            isRead: Boolean(m.isRead),
+          }));
+        }
+        return [];
       } catch (e) {
         console.warn('Messages fetch error:', e);
         return [];
       }
     }
-    const allMsgs = getStorage<Record<string, ChatMessage[]>>('chat_messages', INITIAL_CHAT_MESSAGES);
-    return allMsgs[conversationId] || [];
+    return [];
   },
 
   async sendMessage(conversationId: string, content: string, attachments?: { name: string; size: string; type: 'PDF' | 'DOCX' | 'XLSX' | 'PNG' | 'JPG' }[]): Promise<ChatMessage> {
@@ -1104,12 +910,12 @@ export const chatApi = {
     if (!currentUser) throw new Error('Não autenticado');
     const { content: processedContent, wasModerated } = moderateContent(content, false);
 
-    if (!API_CONFIG.useMock && conversationId.startsWith('conv_contract_')) {
+    if (conversationId && conversationId.startsWith('conv_contract_')) {
       const contractId = conversationId.replace('conv_contract_', '');
       await http(`/api/chat/send/${contractId}`, {
         method: 'POST',
         body: JSON.stringify({ message: processedContent }),
-      });
+      }).catch((e) => console.warn('Chat send error:', e));
     }
 
     return {
@@ -1117,7 +923,7 @@ export const chatApi = {
       conversationId,
       senderId: currentUser.id,
       senderName: currentUser.name,
-      senderAvatar: currentUser.avatarUrl,
+      senderAvatar: currentUser.avatarUrl || '',
       content: processedContent,
       wasModerated,
       timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -1134,7 +940,7 @@ export const chatApi = {
 
     return {
       id: 'conv_prop_' + proposalId,
-      jobId: prop?.jobId || '1',
+      jobId: prop?.jobId || '',
       jobTitle: `Negociação: ${prop?.jobTitle || 'Demanda'}`,
       proposalId: String(proposalId),
       proposalValue: prop?.value || 0,
@@ -1142,12 +948,12 @@ export const chatApi = {
       clientName: currentUser.name,
       state: 'NEGOCIACAO',
       otherUser: {
-        id: prop?.lawyerId || '2',
+        id: prop?.lawyerId || '',
         name: prop?.lawyerName || 'Advogado',
         avatar: prop?.lawyerAvatar || '',
         role: 'LAWYER',
         oabOrCompany: prop?.lawyerOab,
-        isOnline: true,
+        isOnline: false,
       },
       lastMessage: `Proposta enviada: R$ ${(prop?.value || 0).toLocaleString('pt-BR')}`,
       lastMessageTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -1161,65 +967,45 @@ export const chatApi = {
 // ─────────────────────────────────────────────
 export const reviewsApi = {
   async getContractReviews(contractId: string): Promise<Review[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const data = await http<any[]>(`/api/reviews/contract/${contractId}`);
-        return (data || []).map((r) => ({
-          id: String(r.reviewId ?? r.id ?? ''),
-          contractId: String(r.contractId ?? contractId),
-          jobTitle: 'Mandato Jurídico',
-          reviewerId: String(r.reviewerId ?? ''),
-          reviewerName: r.reviewerName || 'Avaliador',
-          reviewerAvatar: '',
-          reviewerRole: 'CLIENT',
-          revieweeId: String(r.revieweeId ?? ''),
-          rating: Number(r.rating || 5),
-          comment: r.comment || '',
-          createdAt: r.createdAt || new Date().toISOString(),
-          status: 'PUBLISHED',
-        }));
-      } catch {
-        return [];
-      }
+    try {
+      const data = await http<any[]>(`/api/reviews/contract/${contractId}`);
+      return (Array.isArray(data) ? data : []).map((r) => ({
+        id: String(r.reviewId ?? r.id ?? ''),
+        contractId: String(r.contractId ?? contractId),
+        jobTitle: 'Mandato Jurídico',
+        reviewerId: String(r.reviewerId ?? ''),
+        reviewerName: r.reviewerName || 'Avaliador',
+        reviewerAvatar: '',
+        reviewerRole: 'CLIENT',
+        revieweeId: String(r.revieweeId ?? ''),
+        rating: Number(r.rating || 5),
+        comment: r.comment || '',
+        createdAt: r.createdAt || new Date().toISOString(),
+        status: 'PUBLISHED',
+      }));
+    } catch {
+      return [];
     }
-    return [];
   },
 
   async submitReview(data: { contractId: string; rating: number; comment: string; detailedRatings?: Record<string, number> }): Promise<{ review: Review; published: boolean }> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
 
-    if (!API_CONFIG.useMock) {
-      const result = await http<any>(`/api/reviews/create/${data.contractId}`, {
-        method: 'POST',
-        body: JSON.stringify({ revieweeId: 1, rating: data.rating, comment: data.comment }),
-      });
-      const review: Review = {
-        id: String(result?.reviewId ?? Date.now()),
-        contractId: data.contractId,
-        jobTitle: 'Mandato Jurídico',
-        reviewerId: currentUser.id,
-        reviewerName: currentUser.name,
-        reviewerAvatar: currentUser.avatarUrl,
-        reviewerRole: currentUser.role,
-        revieweeId: '1',
-        rating: data.rating,
-        comment: data.comment,
-        createdAt: new Date().toISOString(),
-        status: 'PUBLISHED',
-      };
-      return { review, published: true };
-    }
+    const result = await http<any>(`/api/reviews/create/${data.contractId}`, {
+      method: 'POST',
+      body: JSON.stringify({ revieweeId: 1, rating: data.rating, comment: data.comment }),
+    }).catch(() => null);
 
     const review: Review = {
-      id: 'rev_' + Date.now(),
+      id: String(result?.reviewId ?? Date.now()),
       contractId: data.contractId,
-      jobTitle: 'Mandato',
+      jobTitle: 'Mandato Jurídico',
       reviewerId: currentUser.id,
       reviewerName: currentUser.name,
-      reviewerAvatar: currentUser.avatarUrl,
+      reviewerAvatar: currentUser.avatarUrl || '',
       reviewerRole: currentUser.role,
-      revieweeId: '2',
+      revieweeId: '1',
       rating: data.rating,
       comment: data.comment,
       createdAt: new Date().toISOString(),
@@ -1234,18 +1020,16 @@ export const reviewsApi = {
 // ─────────────────────────────────────────────
 export const lawyersApi = {
   async getLawyers(): Promise<UserProfile[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const raw = await http<any[]>('/api/users/?role=LAWYER');
-        if (Array.isArray(raw) && raw.length > 0) {
-          return raw.map(mapBackendUser);
-        }
-        return [];
-      } catch {
-        return [];
+    try {
+      const raw = await http<any[]>('/api/users/lawyers');
+      if (Array.isArray(raw) && raw.length > 0) {
+        return raw.map(mapBackendUser);
       }
+      return [];
+    } catch (e) {
+      console.warn('Lawyers fetch error:', e);
+      return [];
     }
-    return getStorage<UserProfile[]>('lawyers_directory', [INITIAL_LAWYER_USER]);
   },
 
   async sendDirectInvite(lawyerId: string, caseTitle: string, description: string, value: number): Promise<ChatConversation> {
@@ -1265,7 +1049,7 @@ export const lawyersApi = {
       jobTitle: newJob.title,
       value,
       deliveryDays: 15,
-      coverLetter: `Convite de contratação direta.`,
+      coverLetter: 'Convite de contratação direta.',
     });
 
     return await chatApi.getOrCreateNegotiationChat(String(newProposal.id));
@@ -1276,13 +1060,8 @@ export const lawyersApi = {
 // SECTION 13 – DOCUMENTS API
 // ─────────────────────────────────────────────
 export const documentsApi = {
-  async getDocuments(category?: string): Promise<AppDocument[]> {
-    if (!API_CONFIG.useMock) {
-      return [];
-    }
-    let docs = getStorage<AppDocument[]>('documents', INITIAL_DOCUMENTS);
-    if (category && category !== 'Todos') docs = docs.filter((d) => d.category === category);
-    return docs;
+  async getDocuments(_category?: string): Promise<AppDocument[]> {
+    return [];
   },
 
   async uploadDocument(docData: Partial<AppDocument>): Promise<AppDocument> {
@@ -1309,48 +1088,37 @@ export const documentsApi = {
 // ─────────────────────────────────────────────
 export const notificationsApi = {
   async getNotifications(): Promise<Notification[]> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const data = await http<any[]>('/api/notifications/');
-        return (data || []).map((n) => ({
-          id: String(n.notificationId ?? n.id ?? ''),
-          title: n.title || 'Notificação',
-          message: n.message || '',
-          type: (n.type as any) || 'CHAT_MESSAGE',
-          timestamp: n.createdAt ? new Date(n.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Agora',
-          isRead: Boolean(n.isRead),
-          link: n.referenceId ? `/cases/${n.referenceId}` : undefined,
-        }));
-      } catch {
-        return [];
-      }
+    try {
+      const data = await http<any[]>('/api/notifications/');
+      return (Array.isArray(data) ? data : []).map((n) => ({
+        id: String(n.notificationId ?? n.id ?? ''),
+        title: n.title || 'Notificação',
+        message: n.message || '',
+        type: (n.type as any) || 'CHAT_MESSAGE',
+        timestamp: n.createdAt ? new Date(n.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Agora',
+        isRead: Boolean(n.isRead),
+        linkUrl: n.referenceId ? `/cases/${n.referenceId}` : undefined,
+      }));
+    } catch {
+      return [];
     }
-    return getStorage<Notification[]>('notifications', INITIAL_NOTIFICATIONS);
   },
 
   async getUnreadCount(): Promise<number> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const count = await http<number>('/api/notifications/unread/count');
-        return typeof count === 'number' ? count : 0;
-      } catch {
-        return 0;
-      }
+    try {
+      const count = await http<number>('/api/notifications/unread/count');
+      return typeof count === 'number' ? count : 0;
+    } catch {
+      return 0;
     }
-    const notifs = getStorage<Notification[]>('notifications', INITIAL_NOTIFICATIONS);
-    return notifs.filter((n) => !n.isRead).length;
   },
 
   async markAsRead(id: string): Promise<void> {
-    if (!API_CONFIG.useMock) {
-      await http(`/api/notifications/${id}/read`, { method: 'POST' }).catch(() => {});
-    }
+    await http(`/api/notifications/${id}/read`, { method: 'POST' }).catch(() => {});
   },
 
   async markAllAsRead(): Promise<void> {
-    if (!API_CONFIG.useMock) {
-      await http('/api/notifications/read-all', { method: 'POST' }).catch(() => {});
-    }
+    await http('/api/notifications/read-all', { method: 'POST' }).catch(() => {});
   },
 };
 
@@ -1359,13 +1127,76 @@ export const notificationsApi = {
 // ─────────────────────────────────────────────
 export const dashboardApi = {
   async getMetrics(): Promise<DashboardMetrics> {
-    if (!API_CONFIG.useMock) {
-      try {
-        const metrics = await http<any>('/api/dashboard/metrics');
-        if (metrics) return metrics;
-      } catch { /* compute from jobs */ }
+    try {
+      const metrics = await http<any>('/api/dashboard/metrics');
+      if (metrics && typeof metrics === 'object' && 'activeCasesCount' in metrics) {
+        return metrics as DashboardMetrics;
+      }
+    } catch { /* compute from active data */ }
+
+    try {
+      const [jobs, proposals, contracts, user] = await Promise.all([
+        jobsApi.getJobs().catch(() => []),
+        proposalsApi.getProposals().catch(() => []),
+        contractsApi.getContracts().catch(() => []),
+        authApi.getCurrentUser().catch(() => null),
+      ]);
+
+      const activeCasesCount = jobs.filter((j) => j.status === 'OPEN' || j.status === 'IN_PROGRESS').length;
+      const pendingProposalsCount = proposals.filter((p) => p.status === 'PENDING').length;
+      const activeContracts = contracts.filter((c) => c.status === 'ACTIVE');
+      const escrowBalanceTotal = activeContracts.reduce((acc, c) => acc + (c.escrowBalance || 0), 0);
+      const monthlyRevenue = activeContracts.reduce((acc, c) => acc + (c.totalValue || 0), 0);
+
+      const distributionMap: Record<string, number> = {};
+      jobs.forEach((j) => {
+        const spec = j.specialty || 'Outros';
+        distributionMap[spec] = (distributionMap[spec] || 0) + 1;
+      });
+      const totalJobs = jobs.length || 1;
+      const caseDistribution = Object.entries(distributionMap).map(([label, count]) => ({
+        label,
+        count,
+        percentage: Math.round((count / totalJobs) * 100),
+      }));
+
+      const daysOfWeek = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+      const weeklyProductivity = daysOfWeek.map((day) => ({
+        day,
+        horas: 0,
+        casos: 0,
+      }));
+
+      return {
+        activeCasesCount,
+        pendingProposalsCount,
+        monthlyRevenue,
+        escrowBalanceTotal,
+        rating: user?.rating || 5.0,
+        totalClientsOrLawyers: activeContracts.length,
+        weeklyProductivity,
+        caseDistribution: caseDistribution.length > 0 ? caseDistribution : [{ label: 'Geral', count: 0, percentage: 0 }],
+      };
+    } catch {
+      return {
+        activeCasesCount: 0,
+        pendingProposalsCount: 0,
+        monthlyRevenue: 0,
+        escrowBalanceTotal: 0,
+        rating: 5.0,
+        totalClientsOrLawyers: 0,
+        weeklyProductivity: [
+          { day: 'Seg', horas: 0, casos: 0 },
+          { day: 'Ter', horas: 0, casos: 0 },
+          { day: 'Qua', horas: 0, casos: 0 },
+          { day: 'Qui', horas: 0, casos: 0 },
+          { day: 'Sex', horas: 0, casos: 0 },
+          { day: 'Sáb', horas: 0, casos: 0 },
+          { day: 'Dom', horas: 0, casos: 0 },
+        ],
+        caseDistribution: [{ label: 'Geral', count: 0, percentage: 0 }],
+      };
     }
-    return MOCK_DASHBOARD_METRICS;
   },
 };
 
@@ -1373,7 +1204,7 @@ export const dashboardApi = {
 // SECTION 16 – GEMINI AI LEGAL ANALYSIS
 // ─────────────────────────────────────────────
 export const geminiLegalApi = {
-  async analyzeProcess(processTitle: string, description: string): Promise<{
+  async analyzeProcess(processTitle: string, _description: string): Promise<{
     summary: string;
     suggestedStrategy: string;
     estimatedSuccessRate: string;

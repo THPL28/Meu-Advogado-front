@@ -170,38 +170,46 @@ export const DocumentsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50 text-xs text-muted-foreground">
-              {filteredDocs.map((doc) => (
-                <tr key={doc.id} className="hover:bg-background/80 transition-colors">
-                  <td className="py-4 px-3">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-emerald-600 shrink-0" />
-                      <div>
-                        <p className="font-bold text-foreground">{doc.title}</p>
-                        <p className="text-xs text-muted-foreground/90 font-mono mt-0.5">{doc.fileName} ({doc.fileSize})</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-3 text-muted-foreground font-semibold">{doc.category}</td>
-                  <td className="py-4 px-3 text-muted-foreground/90">{doc.uploadedBy}</td>
-                  <td className="py-4 px-3 font-mono text-muted-foreground/90">{doc.uploadDate}</td>
-                  <td className="py-4 px-3 text-center">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      doc.statusTag === 'Assinado' || doc.statusTag === 'Finalizado'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : doc.statusTag === 'Urgente'
-                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                        : 'bg-amber-50 text-amber-700 border border-amber-200'
-                    }`}>
-                      {doc.statusTag}
-                    </span>
-                  </td>
-                  <td className="py-4 px-3 text-right">
-                    <button className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer">
-                      <Download className="w-4 h-4" />
-                    </button>
+              {filteredDocs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-xs text-muted-foreground/90 font-medium">
+                    Você ainda não possui documentos arquivados.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredDocs.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-background/80 transition-colors">
+                    <td className="py-4 px-3">
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="font-bold text-foreground">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground/90 font-mono mt-0.5">{doc.fileName} ({doc.fileSize})</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-3 text-muted-foreground font-semibold">{doc.category}</td>
+                    <td className="py-4 px-3 text-muted-foreground/90">{doc.uploadedBy}</td>
+                    <td className="py-4 px-3 font-mono text-muted-foreground/90">{doc.uploadDate}</td>
+                    <td className="py-4 px-3 text-center">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        doc.statusTag === 'Assinado' || doc.statusTag === 'Finalizado'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : doc.statusTag === 'Urgente'
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
+                        {doc.statusTag}
+                      </span>
+                    </td>
+                    <td className="py-4 px-3 text-right">
+                      <button className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer">
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

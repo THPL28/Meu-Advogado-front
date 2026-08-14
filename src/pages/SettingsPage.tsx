@@ -53,7 +53,7 @@ export const SettingsPage: React.FC = () => {
   // Security states
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
   const [publicSearchable, setPublicSearchable] = useState(true);
-  const [pixKey, setPixKey] = useState(user?.email || 'rodrigo.silveira@adv.oabsp.org.br');
+  const [pixKey, setPixKey] = useState(user?.email || '');
 
   // Integrations states
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(true);
@@ -498,7 +498,7 @@ export const SettingsPage: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground/90 leading-relaxed">
-                Inscrição OAB/{user?.oabState || 'SP'} {user?.oabNumber || '412.980'} confirmada no Cadastro Nacional dos Advogados (CNA).
+                Inscrição OAB/{user?.oabState || 'SP'} {user?.oabNumber || ''} confirmada no Cadastro Nacional dos Advogados (CNA).
               </p>
               <div className="p-3 bg-card rounded-xl border border-border text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />

@@ -36,16 +36,17 @@ export const DashboardPage: React.FC = () => {
   const pendingProposals = proposals.filter(p => p.status === 'PENDING' || p.status === 'UNDER_REVIEW');
   const upcomingHearings = jobs.flatMap(j => j.upcomingHearings || []);
 
-  // Plan consumption metrics
+  // Plan consumption metrics computed dynamically
   const currentPlan = user?.subscriptionPlan || 'Pro';
+  const lawyerProposals = proposals.filter(p => !p.lawyerId || p.lawyerId === user?.id);
   const weeklyLimit = currentPlan === 'Basic' ? 2 : currentPlan === 'Pro' ? 8 : 999;
-  const weeklyUsed = currentPlan === 'Basic' ? 2 : 6;
+  const weeklyUsed = Math.min(lawyerProposals.length, weeklyLimit);
 
   const monthlyLimit = currentPlan === 'Basic' ? 5 : currentPlan === 'Pro' ? 25 : 999;
-  const monthlyUsed = currentPlan === 'Basic' ? 4 : 18;
+  const monthlyUsed = lawyerProposals.length;
 
   const concurrentLimit = currentPlan === 'Basic' ? 2 : currentPlan === 'Pro' ? 5 : 999;
-  const concurrentUsed = currentPlan === 'Basic' ? 2 : 3;
+  const concurrentUsed = lawyerProposals.filter(p => p.status === 'PENDING' || p.status === 'UNDER_REVIEW').length;
 
   // Filter opportunities for lawyer: OPEN jobs where lawyer hasn't submitted a proposal yet
   const userSpecialties = (user?.specialties || []).map(s => s.toLowerCase().trim());
@@ -378,7 +379,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="flex items-baseline justify-between">
             <span className={`text-2xl lg:text-3xl font-extrabold font-mono tracking-tight ${role === 'LAWYER' ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
-              {role === 'LAWYER' ? 'R$ 14.850,00' : 'R$ 0,00'}
+              {role === 'LAWYER' ? `R$ ${(user?.lawyerWallet?.availableBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
             </span>
           </div>
         </div>
@@ -395,7 +396,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl lg:text-3xl font-extrabold text-foreground font-mono tracking-tight">
-              {role === 'LAWYER' ? (user?.rating || 4.9) : jobs.filter(j => j.status === 'COMPLETED').length}
+              {role === 'LAWYER' ? (user?.rating ?? 5.0) : jobs.filter(j => j.status === 'COMPLETED').length}
             </span>
           </div>
         </div>
@@ -441,7 +442,7 @@ export const DashboardPage: React.FC = () => {
                   style={{ width: `${weeklyLimit === 999 ? 100 : Math.min(100, (weeklyUsed / weeklyLimit) * 100)}%` }}
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground/90 font-medium">Renova em 4 dias</p>
+              <p className="text-[11px] text-muted-foreground/90 font-medium">Controle semanal do plano</p>
             </div>
 
             {/* Monthly */}
@@ -460,7 +461,7 @@ export const DashboardPage: React.FC = () => {
                   style={{ width: `${monthlyLimit === 999 ? 100 : Math.min(100, (monthlyUsed / monthlyLimit) * 100)}%` }}
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground/90 font-medium">Ciclo renova em 12/03/2025</p>
+              <p className="text-[11px] text-muted-foreground/90 font-medium">Controle mensal do plano</p>
             </div>
 
             {/* Concurrent */}

@@ -4,10 +4,10 @@ import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { paymentsApi } from '../../services/api';
 
 export const PayoutModal: React.FC = () => {
-  const { isPayoutModalOpen, setIsPayoutModalOpen, payments, refreshData } = useLegalPlatform();
+  const { isPayoutModalOpen, setIsPayoutModalOpen, payments, refreshData, user } = useLegalPlatform();
 
-  const [amount, setAmount] = useState('14850');
-  const [pixKey, setPixKey] = useState('rodrigo.silveira@adv.oabsp.org.br');
+  const [amount, setAmount] = useState('');
+  const [pixKey, setPixKey] = useState(user?.email || '');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -74,7 +74,9 @@ export const PayoutModal: React.FC = () => {
                   className="w-full bg-background border border-border rounded-xl pl-10 pr-3 py-2.5 text-base font-mono font-bold text-emerald-600 dark:text-emerald-400 focus:bg-card focus:outline-none focus:border-emerald-600 transition-all"
                 />
               </div>
-              <p className="text-xs text-muted-foreground/90 mt-1">Saldo Total Disponível: R$ 14.850,00</p>
+              <p className="text-xs text-muted-foreground/90 mt-1">
+                Saldo Total Disponível: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(user?.lawyerWallet?.availableBalance || 0)}
+              </p>
             </div>
 
             <div>

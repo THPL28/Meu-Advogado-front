@@ -89,7 +89,8 @@ export const ProposalsPage: React.FC = () => {
     openLawyerProfile,
     openClientProfile,
     navigateToCaseDetail,
-    withdrawProposal
+    withdrawProposal,
+    setActiveTab
   } = useLegalPlatform();
 
   // Client view state
@@ -216,7 +217,7 @@ export const ProposalsPage: React.FC = () => {
               <FileCheck2 className="w-10 h-10 text-muted-foreground mx-auto" />
               <p className="text-sm font-bold text-muted-foreground">Nenhuma proposta enviada encontrada para estes filtros.</p>
               <button
-                onClick={() => navigateToCaseDetail('job_101')}
+                onClick={() => setActiveTab('find-jobs')}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold cursor-pointer"
               >
                 Explorar Oportunidades
@@ -260,13 +261,20 @@ export const ProposalsPage: React.FC = () => {
                       </h3>
 
                       {/* Client Info link */}
-                      <button
-                        onClick={() => openClientProfile(matchedJob?.clientId || 'cli_1')}
-                        className="text-xs font-bold text-muted-foreground/90 hover:text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 cursor-pointer pt-1"
-                      >
-                        <Building2 className="w-3.5 h-3.5 text-muted-foreground/90" />
-                        Cliente: <span className="underline">{matchedJob?.clientName || 'TechCorp Soluções'}</span>
-                      </button>
+                      {matchedJob?.clientId ? (
+                        <button
+                          onClick={() => openClientProfile(matchedJob.clientId)}
+                          className="text-xs font-bold text-muted-foreground/90 hover:text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 cursor-pointer pt-1"
+                        >
+                          <Building2 className="w-3.5 h-3.5 text-muted-foreground/90" />
+                          Cliente: <span className="underline">{matchedJob.clientName || 'Cliente'}</span>
+                        </button>
+                      ) : (
+                        <div className="text-xs font-bold text-muted-foreground/90 flex items-center gap-1.5 pt-1">
+                          <Building2 className="w-3.5 h-3.5 text-muted-foreground/90" />
+                          Cliente: <span>{matchedJob?.clientName || 'Cliente'}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="text-left sm:text-right shrink-0 bg-background p-4 rounded-2xl border border-border/50 min-w-[180px]">

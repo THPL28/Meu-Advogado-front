@@ -8,11 +8,11 @@ export const BankDetailsModal: React.FC = () => {
   const bankInfo = user?.lawyerWallet?.bankInfo;
 
   const [pixKeyType, setPixKeyType] = useState<any>(bankInfo?.pixKeyType || 'CPF');
-  const [pixKey, setPixKey] = useState(bankInfo?.pixKey || user?.cpfCnpj || '');
-  const [bankName, setBankName] = useState(bankInfo?.bankName || 'Banco Itaú Unibanco S.A.');
+  const [pixKey, setPixKey] = useState(bankInfo?.pixKey || user?.cpfCnpj || user?.email || '');
+  const [bankName, setBankName] = useState(bankInfo?.bankName || '');
   const [accountType, setAccountType] = useState<any>(bankInfo?.accountType || 'CORRENTE');
-  const [agency, setAgency] = useState(bankInfo?.agency || '0382');
-  const [accountNumber, setAccountNumber] = useState(bankInfo?.accountNumber || '49120-8');
+  const [agency, setAgency] = useState(bankInfo?.agency || '');
+  const [accountNumber, setAccountNumber] = useState(bankInfo?.accountNumber || '');
 
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -119,6 +119,7 @@ export const BankDetailsModal: React.FC = () => {
                   onChange={(e) => setBankName(e.target.value)}
                   className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground/90 focus:bg-card focus:outline-none focus:border-emerald-600"
                 >
+                  <option value="">Selecione o banco...</option>
                   <option value="Banco Itaú Unibanco S.A.">Banco Itaú Unibanco S.A. (341)</option>
                   <option value="Banco Bradesco S.A.">Banco Bradesco S.A. (237)</option>
                   <option value="Banco do Brasil S.A.">Banco do Brasil S.A. (001)</option>

@@ -156,7 +156,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
                 <input
                   type="text"
                   required
-                  placeholder={selectedRole === 'LAWYER' ? 'Silveira' : 'TechCorp Brasil'}
+                  placeholder={selectedRole === 'LAWYER' ? 'Silva' : 'Minha Empresa Ltda'}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground/90 placeholder:text-muted-foreground/60 focus:bg-card focus:outline-none focus:border-emerald-600 transition-all"
@@ -258,7 +258,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Razão Social / Nome da Empresa</label>
               <input
                 type="text"
-                placeholder="TechCorp Brasil Ltda"
+                placeholder="Minha Empresa Ltda"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground/90 placeholder:text-muted-foreground/60 focus:bg-card focus:outline-none focus:border-emerald-600 transition-all"

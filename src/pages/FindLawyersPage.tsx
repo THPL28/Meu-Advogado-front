@@ -26,7 +26,6 @@ export const FindLawyersPage: React.FC = () => {
     lawyers,
     openLawyerProfile,
     openInviteModal,
-    openNegotiationChat,
     role,
     setIsNewProposalModalOpen,
     user,
@@ -310,7 +309,7 @@ export const FindLawyersPage: React.FC = () => {
           {filteredLawyers.length === 0 ? (
             <div className="bg-card rounded-3xl border border-border p-12 text-center space-y-3">
               <UserCheck className="w-12 h-12 text-muted-foreground mx-auto" />
-              <h3 className="text-base font-bold text-foreground">Nenhum advogado encontrado com estes filtros</h3>
+              <h3 className="text-base font-bold text-foreground">Nenhum advogado encontrado com estes filtros.</h3>
               <p className="text-xs text-muted-foreground/90 max-w-sm mx-auto">
                 Tente ajustar o termo de busca ou redefinir os filtros avançados de localização e valor para ver mais profissionais.
               </p>
@@ -430,7 +429,7 @@ export const FindLawyersPage: React.FC = () => {
                           if (!user) {
                             setActiveTab('login');
                           } else {
-                            openNegotiationChat('prop_201');
+                            openInviteModal(lawyer.id);
                           }
                         }}
                         className="px-3 py-2 rounded-xl bg-card border border-border hover:bg-background text-foreground/90 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"

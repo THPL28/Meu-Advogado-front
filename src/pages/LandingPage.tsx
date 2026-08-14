@@ -99,14 +99,22 @@ export const LandingPage: React.FC = () => {
             <div className="lg:col-span-5 relative flex items-center justify-center">
               <div className="relative w-full max-w-[420px]">
                 
-                {/* Main Image with Frame */}
-                <div className="relative rounded-3xl overflow-hidden aspect-[3/4] border-8 border-border/50 shadow-2xl">
-                  <img
-                    src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=800"
-                    alt="Advogada Especialista LexisPremium"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent" />
+                {/* Main Hero Graphic Frame */}
+                <div className="relative rounded-3xl overflow-hidden aspect-[3/4] border-8 border-border/50 shadow-2xl bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 flex flex-col items-center justify-center p-8 text-white text-center">
+                  <div className="w-20 h-20 rounded-3xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/10">
+                    <Gavel className="w-10 h-10 text-emerald-400" />
+                  </div>
+                  <h3 className="text-xl font-extrabold tracking-tight text-white mb-2">
+                    LWork Inteligência Jurídica
+                  </h3>
+                  <p className="text-xs text-emerald-200/70 leading-relaxed max-w-xs mb-6">
+                    Custódia Escrow segura, contratos inteligentes e análise avançada de processos com IA.
+                  </p>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-2xl backdrop-blur-xs border border-white/10 text-xs font-bold">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>100% Protegido & Verificado</span>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent pointer-events-none" />
                 </div>
 
                 {/* Floating Glassmorphic Cards */}
@@ -455,7 +463,7 @@ export const LandingPage: React.FC = () => {
                     <p className="text-xs font-bold text-foreground">Atividades Processuais Recentes</p>
                     <div className="space-y-1.5 text-xs text-muted-foreground/90">
                       <div className="p-2 bg-card rounded-xl border border-border/50 flex justify-between items-center">
-                        <span>Contrato M&A TechCorp • Marco #2 Aprovado</span>
+                        <span>Contrato M&A Societário • Marco #2 Aprovado</span>
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold">R$ 15.000 Liberado</span>
                       </div>
                       <div className="p-2 bg-card rounded-xl border border-border/50 flex justify-between items-center">
@@ -489,17 +497,15 @@ export const LandingPage: React.FC = () => {
                   ))}
                 </div>
                 <p className="text-xs sm:text-sm italic text-muted-foreground leading-relaxed">
-                  "A LexisPremium mudou a forma como lidamos com as demandas corporativas. A transparência na custódia de honorários trouxe uma segurança que não encontrávamos em nenhum outro lugar."
+                  "O LWork mudou a forma como lidamos com as demandas corporativas. A transparência na custódia de honorários trouxe uma segurança que não encontrávamos em nenhum outro lugar."
                 </p>
                 <div className="flex items-center gap-3 pt-2">
-                  <img
-                    src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=200"
-                    alt="Dr. Ricardo Almeida"
-                    className="w-11 h-11 rounded-full object-cover ring-2 ring-emerald-500/20"
-                  />
+                  <div className="w-11 h-11 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 flex items-center justify-center font-bold text-xs ring-2 ring-emerald-500/20 shrink-0">
+                    RA
+                  </div>
                   <div>
                     <p className="text-xs font-extrabold text-foreground">Dr. Ricardo Almeida</p>
-                    <p className="text-[10px] font-bold text-alt-foreground/60 uppercase">Diretor Jurídico TechCorp</p>
+                    <p className="text-[10px] font-bold text-alt-foreground/60 uppercase">Diretor Jurídico Corporativo</p>
                   </div>
                 </div>
               </div>
@@ -515,11 +521,9 @@ export const LandingPage: React.FC = () => {
                   "Como advogada autônoma, a IA da plataforma me deu a produtividade de um escritório inteiro. Consigo gerir 3x mais casos com a mesma equipe reduzida."
                 </p>
                 <div className="flex items-center gap-3 pt-2">
-                  <img
-                    src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200"
-                    alt="Dra. Marina Costa"
-                    className="w-11 h-11 rounded-full object-cover ring-2 ring-emerald-500/20"
-                  />
+                  <div className="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-200 flex items-center justify-center font-bold text-xs ring-2 ring-emerald-500/20 shrink-0">
+                    MC
+                  </div>
                   <div>
                     <p className="text-xs font-extrabold text-foreground">Dra. Marina Costa</p>
                     <p className="text-[10px] font-bold text-alt-foreground/60 uppercase">Especialista Cível</p>
@@ -538,11 +542,9 @@ export const LandingPage: React.FC = () => {
                   "A ferramenta de assinatura digital e os relatórios em blockchain elevaram nosso padrão de compliance. Nossos clientes sentem a diferença na segurança dos dados."
                 </p>
                 <div className="flex items-center gap-3 pt-2">
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200"
-                    alt="Dr. Jorge Mendonça"
-                    className="w-11 h-11 rounded-full object-cover ring-2 ring-emerald-500/20"
-                  />
+                  <div className="w-11 h-11 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 flex items-center justify-center font-bold text-xs ring-2 ring-emerald-500/20 shrink-0">
+                    JM
+                  </div>
                   <div>
                     <p className="text-xs font-extrabold text-foreground">Dr. Jorge Mendonça</p>
                     <p className="text-[10px] font-bold text-alt-foreground/60 uppercase">Sócio Senior JMB Advogados</p>

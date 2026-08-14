@@ -45,11 +45,28 @@ export const LawyerPublicProfile: React.FC<LawyerPublicProfileProps> = ({ profil
   } = useLegalPlatform();
 
   const activeSlug = profileSlug || selectedLawyerSlug;
-  const lawyer = lawyers.find(l => l.slug === activeSlug || l.id === activeSlug) || lawyers[0];
+  const lawyer = lawyers.find(l => l.slug === activeSlug || l.id === activeSlug);
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [activeSection, setActiveSection] = useState<'bio' | 'specialties' | 'portfolio' | 'projects' | 'reviews' | 'experience'>('bio');
+
+  if (!lawyer) {
+    return (
+      <div className="max-w-md mx-auto p-12 text-center bg-card border border-border rounded-3xl shadow-xs space-y-4 my-12 animate-in fade-in duration-200">
+        <h3 className="text-lg font-bold text-foreground">Advogado não encontrado.</h3>
+        <p className="text-xs text-muted-foreground/90">
+          O perfil do advogado solicitado não está disponível ou foi desativado.
+        </p>
+        <button
+          onClick={() => setActiveTab('find-lawyers')}
+          className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold cursor-pointer"
+        >
+          Explorar Advogados
+        </button>
+      </div>
+    );
+  }
 
   const isOwnProfile = user?.id === lawyer.id || user?.email === lawyer.email;
 
@@ -185,7 +202,7 @@ export const LawyerPublicProfile: React.FC<LawyerPublicProfileProps> = ({ profil
                 <button
                   onClick={() => {
                     if (!user) setActiveTab('login');
-                    else openNegotiationChat('prop_201');
+                    else openInviteModal(lawyer.id);
                   }}
                   className="px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted text-foreground/90 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 >

@@ -186,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-muted-foreground/90 hover:text-foreground'
               }`}
             >
-              Dr. Rodrigo (Adv)
+              Advogado
             </button>
             <button
               onClick={() => switchRole('CLIENT')}
@@ -196,7 +196,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-muted-foreground/90 hover:text-foreground'
               }`}
             >
-              TechCorp (Cliente)
+              Cliente
             </button>
           </div>
 
@@ -225,21 +225,27 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="text-xs text-muted-foreground/90">{notifications.length} recados</span>
                 </div>
                 <div className="max-h-80 overflow-y-auto divide-y divide-border/50 my-2">
-                  {notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      onClick={() => markNotificationRead(n.id)}
-                      className={`py-3 px-2 rounded-xl cursor-pointer transition-colors ${
-                        !n.isRead ? 'bg-emerald-50/50' : 'hover:bg-background'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-semibold text-xs text-foreground">{n.title}</span>
-                        <span className="text-[11px] text-muted-foreground/90 whitespace-nowrap">{n.timestamp}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground/90 mt-1">{n.message}</p>
+                  {notifications.length === 0 ? (
+                    <div className="py-8 px-4 text-center text-xs text-muted-foreground/90 font-medium">
+                      Você não possui novas notificações.
                     </div>
-                  ))}
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={() => markNotificationRead(n.id)}
+                        className={`py-3 px-2 rounded-xl cursor-pointer transition-colors ${
+                          !n.isRead ? 'bg-emerald-50/50' : 'hover:bg-background'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-semibold text-xs text-foreground">{n.title}</span>
+                          <span className="text-[11px] text-muted-foreground/90 whitespace-nowrap">{n.timestamp}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground/90 mt-1">{n.message}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -251,11 +257,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-xl bg-muted hover:bg-muted/80 transition-all border border-border cursor-pointer"
             >
-              <img
-                src={user?.avatarUrl}
-                alt={user?.name}
-                className="w-8 h-8 rounded-lg object-cover ring-2 ring-emerald-500/30"
-              />
+              {user?.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user?.name || 'Avatar'}
+                  className="w-8 h-8 rounded-lg object-cover ring-2 ring-emerald-500/30"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs ring-2 ring-emerald-500/30">
+                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
               <ChevronDown className="w-4 h-4 text-muted-foreground/90" />
             </button>
 
@@ -378,7 +390,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       : 'bg-card text-muted-foreground border border-border'
                   }`}
                 >
-                  Dr. Rodrigo (Adv)
+                  Advogado
                 </button>
                 <button
                   onClick={() => switchRole('CLIENT')}
@@ -388,7 +400,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       : 'bg-card text-muted-foreground border border-border'
                   }`}
                 >
-                  TechCorp (Cliente)
+                  Cliente
                 </button>
               </div>
             </div>
@@ -430,11 +442,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* User Profile Footer */}
             <div className="pt-4 border-t border-border space-y-3">
               <div className="flex items-center gap-3">
-                <img
-                  src={user?.avatarUrl}
-                  alt={user?.name}
-                  className="w-10 h-10 rounded-xl object-cover ring-2 ring-emerald-600"
-                />
+                {user?.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt={user?.name || 'Avatar'}
+                    className="w-10 h-10 rounded-xl object-cover ring-2 ring-emerald-600"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-sm ring-2 ring-emerald-600 shrink-0">
+                    {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                )}
                 <div>
                   <p className="text-xs font-bold text-foreground">{user?.name}</p>
                   <p className="text-xs text-muted-foreground/90">{user?.email}</p>

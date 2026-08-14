@@ -19,14 +19,14 @@ import { useLegalPlatform } from '../hooks/useLegalPlatform';
 import { authApi } from '../services/api';
 
 export const SubscriptionPage: React.FC = () => {
-  const { role, user, refreshData, paySubscriptionWithBalance, setIsAddBalanceModalOpen } = useLegalPlatform();
+  const { role, user, refreshData, paySubscriptionWithBalance, setIsAddBalanceModalOpen, proposals } = useLegalPlatform();
   
   const [activeTab, setActiveTab] = useState<'plans' | 'billing'>('plans');
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [cardName, setCardName] = useState('Dr. Rodrigo Silveira');
-  const [cardNumber, setCardNumber] = useState('4092 **** **** 8812');
+  const [cardName, setCardName] = useState(user?.name || '');
+  const [cardNumber, setCardNumber] = useState('•••• •••• •••• 8812');
   const [cardExp, setCardExp] = useState('12/28');
   const [cardCvc, setCardCvc] = useState('491');
   const [updating, setUpdating] = useState(false);
@@ -44,15 +44,16 @@ export const SubscriptionPage: React.FC = () => {
   const currentPlan = user?.subscriptionPlan || 'Pro';
   const lawyerInternalBalance = user?.lawyerWallet?.internalBalance || 0;
 
-  // Consumption statistics
+  // Consumption statistics computed dynamically
+  const lawyerProposals = proposals.filter(p => !p.lawyerId || p.lawyerId === user?.id);
   const weeklyLimit = currentPlan === 'Basic' ? 2 : currentPlan === 'Pro' ? 8 : 999;
-  const weeklyUsed = currentPlan === 'Basic' ? 2 : 6;
+  const weeklyUsed = Math.min(lawyerProposals.length, weeklyLimit);
 
   const monthlyLimit = currentPlan === 'Basic' ? 5 : currentPlan === 'Pro' ? 25 : 999;
-  const monthlyUsed = currentPlan === 'Basic' ? 4 : 18;
+  const monthlyUsed = lawyerProposals.length;
 
   const concurrentLimit = currentPlan === 'Basic' ? 2 : currentPlan === 'Pro' ? 5 : 999;
-  const concurrentUsed = currentPlan === 'Basic' ? 2 : 3;
+  const concurrentUsed = lawyerProposals.filter(p => p.status === 'PENDING' || p.status === 'UNDER_REVIEW').length;
 
   const isNearLimit = (monthlyUsed / monthlyLimit) >= 0.8 && currentPlan !== 'Premium';
 
@@ -363,36 +364,9 @@ export const SubscriptionPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  <tr className="hover:bg-background/50 transition-colors">
-                    <td className="p-4 text-xs font-medium text-foreground">01 Fev 2025</td>
-                    <td className="p-4 text-xs text-muted-foreground/90">Assinatura Plano Pro (Mensal)</td>
-                    <td className="p-4 text-xs font-mono font-bold text-foreground">R$ 99,00</td>
-                    <td className="p-4">
-                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-bold uppercase tracking-wider">Pago</span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => handleDownloadInvoice('INV-2025-001')}
-                        className="p-2 rounded-lg hover:bg-muted text-alt-foreground/50 hover:text-emerald-600 transition-colors inline-flex cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-background/50 transition-colors">
-                    <td className="p-4 text-xs font-medium text-foreground">01 Jan 2025</td>
-                    <td className="p-4 text-xs text-muted-foreground/90">Assinatura Plano Pro (Mensal)</td>
-                    <td className="p-4 text-xs font-mono font-bold text-foreground">R$ 99,00</td>
-                    <td className="p-4">
-                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-bold uppercase tracking-wider">Pago</span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => handleDownloadInvoice('INV-2025-002')}
-                        className="p-2 rounded-lg hover:bg-muted text-alt-foreground/50 hover:text-emerald-600 transition-colors inline-flex cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground/90 font-medium">
+                      Nenhuma fatura anterior registrada.
                     </td>
                   </tr>
                 </tbody>
