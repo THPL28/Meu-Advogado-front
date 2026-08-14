@@ -18,7 +18,8 @@ import {
   documentsApi,
   notificationsApi,
   dashboardApi,
-  chatApi
+  chatApi,
+  getStoredToken
 } from '../services/api';
 import { MOCK_LAWYERS } from '../services/mock/mockLawyers';
 
@@ -283,24 +284,36 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const refreshData = async () => {
     try {
-      const [j, p, c, pay, d, n, m] = await Promise.all([
-        jobsApi.getJobs(),
-        proposalsApi.getProposals(),
-        contractsApi.getContracts(),
-        paymentsApi.getPayments(),
-        documentsApi.getDocuments(),
-        notificationsApi.getNotifications(),
-        dashboardApi.getMetrics()
-      ]);
-      setJobs(j);
-      setProposals(p);
-      setContracts(c);
-      setPayments(pay);
-      setDocuments(d);
-      setNotifications(n);
-      setMetrics(m);
+      const token = getStoredToken();
+      if (token) {
+        const [j, p, c, pay, d, n, m] = await Promise.all([
+          jobsApi.getJobs().catch(() => []),
+          proposalsApi.getProposals().catch(() => []),
+          contractsApi.getContracts().catch(() => []),
+          paymentsApi.getPayments().catch(() => []),
+          documentsApi.getDocuments().catch(() => []),
+          notificationsApi.getNotifications().catch(() => []),
+          dashboardApi.getMetrics().catch(() => null),
+        ]);
+        setJobs(j);
+        setProposals(p);
+        setContracts(c);
+        setPayments(pay);
+        setDocuments(d);
+        setNotifications(n);
+        setMetrics(m);
+      } else {
+        const j = await jobsApi.getJobs().catch(() => []);
+        setJobs(j);
+        setProposals([]);
+        setContracts([]);
+        setPayments([]);
+        setDocuments([]);
+        setNotifications([]);
+        setMetrics(null);
+      }
     } catch (err) {
-      console.error('Failed to load platform data:', err);
+      console.warn('Failed to load platform data:', err);
     } finally {
       setLoading(false);
     }

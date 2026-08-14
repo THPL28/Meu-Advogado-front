@@ -10,7 +10,7 @@ interface AuthPageProps {
 
 export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
   const { login, register, error, clearError, loading } = useAuth();
-  const { setActiveTab } = usePlatform();
+  const { setActiveTab, refreshData } = usePlatform();
 
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [selectedRole, setSelectedRole] = useState<Role>('LAWYER');
@@ -76,6 +76,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
           companyName: selectedRole === 'CLIENT' ? (companyName.trim() || lastName.trim()) : undefined,
         });
       }
+      await refreshData();
       setActiveTab('dashboard');
     } catch (err) {
       // Error is already set in AuthContext; we only catch to prevent unhandled rejection

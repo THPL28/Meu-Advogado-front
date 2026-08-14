@@ -51,7 +51,7 @@ import {
 } from '../mock/mockData';
 
 // ─────────────────────────────────────────────
-// SECTION 1 – LOCAL STORAGE HELPERS
+// SECTION 1 – LOCAL STORAGE & TOKEN HELPERS
 // ─────────────────────────────────────────────
 function getStorage<T>(key: string, defaultValue: T): T {
   try {
@@ -70,44 +70,91 @@ function setStorage<T>(key: string, value: T): void {
   }
 }
 
+export function getStoredToken(): string | null {
+  try {
+    return localStorage.getItem(API_CONFIG.storagePrefix + 'jwt_token');
+  } catch {
+    return null;
+  }
+}
+
+export function getStoredRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(API_CONFIG.storagePrefix + 'refresh_token');
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredTokens(token?: string, refreshToken?: string): void {
+  try {
+    if (token) localStorage.setItem(API_CONFIG.storagePrefix + 'jwt_token', token);
+    if (refreshToken) localStorage.setItem(API_CONFIG.storagePrefix + 'refresh_token', refreshToken);
+  } catch (err) {
+    console.error('LocalStorage write error:', err);
+  }
+}
+
 function clearAuthStorage(): void {
-  localStorage.removeItem(API_CONFIG.storagePrefix + 'current_user');
+  try {
+    localStorage.removeItem(API_CONFIG.storagePrefix + 'current_user');
+    localStorage.removeItem(API_CONFIG.storagePrefix + 'jwt_token');
+    localStorage.removeItem(API_CONFIG.storagePrefix + 'refresh_token');
+  } catch {}
 }
 
 // ─────────────────────────────────────────────
-// SECTION 2 – HTTP HELPER (real backend calls)
+// SECTION 2 – HTTP HELPER (real backend calls with Bearer Token + Cookies)
 // ─────────────────────────────────────────────
 let isRefreshing = false;
 
 async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_CONFIG.baseURL}${path}`;
+  const token = getStoredToken();
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
   const res = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      ...authHeaders,
       ...(options.headers || {}),
     },
   });
 
-  // Token expired – attempt one silent refresh
-  if (res.status === 401 && !isRefreshing && !path.includes('/api/auth/login')) {
+  // Token expired – attempt one silent refresh ONLY if we had an existing token session
+  const refreshToken = getStoredRefreshToken();
+  if (res.status === 401 && !isRefreshing && !path.includes('/api/auth/login') && !path.includes('/api/auth/register') && (token || refreshToken)) {
     isRefreshing = true;
     try {
       const refreshRes = await fetch(`${API_CONFIG.baseURL}/api/auth/refresh-token`, {
         method: 'POST',
         credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(refreshToken ? { Authorization: `Bearer ${refreshToken}` } : {}),
+        },
+        body: JSON.stringify({ refreshToken: refreshToken || '' }),
       });
       if (refreshRes.ok) {
         isRefreshing = false;
+        const refreshData = await refreshRes.json();
+        const newToken = refreshData?.data?.jwtCookie?.value || refreshData?.jwtCookie?.value || refreshData?.data?.accessToken || refreshData?.accessToken;
+        if (newToken) {
+          setStoredTokens(newToken);
+        }
         // Retry original request after refresh
+        const retryHeaders: Record<string, string> = newToken ? { Authorization: `Bearer ${newToken}` } : authHeaders;
         const retryRes = await fetch(url, {
           ...options,
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            ...retryHeaders,
             ...(options.headers || {}),
           },
         });
@@ -336,10 +383,18 @@ export const authApi = {
       setStorage('current_user', user);
       return user;
     }
-    await http<Record<string, unknown>>('/api/auth/login', {
+    const resData = await http<any>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+
+    // Extract and persist JWT tokens immediately
+    const token = resData?.jwtCookie?.value || resData?.data?.jwtCookie?.value || resData?.token || resData?.accessToken;
+    const refreshToken = resData?.refreshJwtCookie?.value || resData?.data?.refreshJwtCookie?.value || resData?.refreshToken;
+    if (token) {
+      setStoredTokens(token, refreshToken);
+    }
+
     const user = await authApi.getCurrentUser();
     if (!user) throw new Error('Falha ao obter perfil após login.');
     setStorage('current_user', user);
@@ -396,7 +451,20 @@ export const authApi = {
       }),
     });
 
-    return await authApi.login(data.email, data.password);
+    const user = await authApi.login(data.email, data.password);
+
+    // Save extra profile attributes if supplied
+    if (data.phone || data.cpfCnpj || data.oabNumber || data.oabState || data.companyName) {
+      await authApi.updateProfile({
+        phone: data.phone,
+        cpfCnpj: data.cpfCnpj,
+        oabNumber: data.oabNumber,
+        oabState: data.oabState,
+        companyName: data.companyName,
+      }).catch(() => {});
+    }
+
+    return user;
   },
 
   async logout(): Promise<void> {
