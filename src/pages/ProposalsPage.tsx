@@ -3,6 +3,8 @@ import {
   FileCheck2,
   CheckCircle2,
   ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
   DollarSign,
   MessageSquare,
   Briefcase,
@@ -84,6 +86,8 @@ export const ProposalsPage: React.FC = () => {
     jobs,
     role,
     user,
+    verificationStatus,
+    isVerifiedLawyer,
     refreshData,
     openNegotiationChat,
     openLawyerProfile,
@@ -155,6 +159,39 @@ export const ProposalsPage: React.FC = () => {
     return (
       <div className="space-y-8 animate-in fade-in duration-200">
         
+        {/* Informative Status Banner for Pending or Unverified Lawyer */}
+        {role === 'LAWYER' && verificationStatus !== 'VERIFIED' && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                  {verificationStatus === 'PENDING'
+                    ? 'Status da Conta: Inscrição OAB em Análise'
+                    : verificationStatus === 'REJECTED'
+                    ? 'Status da Conta: Cadastro Rejeitado'
+                    : verificationStatus === 'SUSPENDED'
+                    ? 'Status da Conta: Inscrição Suspensa'
+                    : verificationStatus === 'EXPIRED'
+                    ? 'Status da Conta: Certidão Expirada'
+                    : 'Status da Conta: Verificação OAB Pendente'}
+                </h4>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5">
+                  {verificationStatus === 'PENDING'
+                    ? 'Suas propostas submetidas permanecem registradas. Novas propostas requerem a conclusão da verificação cadastral.'
+                    : 'Para submeter novas propostas ou assumir contratos com clientes, é necessário validar suas credenciais da OAB.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('edit-profile')}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 transition-all cursor-pointer"
+            >
+              {verificationStatus === 'PENDING' ? 'Ver Status Cadastral' : 'Regularizar Cadastro'}
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border/80">
           <div>

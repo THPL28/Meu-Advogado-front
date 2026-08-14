@@ -3,6 +3,9 @@ import {
   Search,
   Filter,
   ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
+  X,
   Star,
   Clock,
   MapPin,
@@ -24,6 +27,8 @@ export const FindJobsPage: React.FC = () => {
     jobs,
     role,
     user,
+    verificationStatus,
+    isVerifiedLawyer,
     setActiveTab,
     navigateToCaseDetail,
     setIsNewProposalModalOpen,
@@ -33,6 +38,7 @@ export const FindJobsPage: React.FC = () => {
     proposals
   } = useLegalPlatform();
 
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('ALL');
   const [selectedSort, setSelectedSort] = useState<string>('recent');
@@ -214,6 +220,11 @@ export const FindJobsPage: React.FC = () => {
       return;
     }
 
+    if (role === 'LAWYER' && verificationStatus !== 'VERIFIED') {
+      setIsVerificationModalOpen(true);
+      return;
+    }
+
     // Check if lawyer already submitted a proposal
     const existing = proposals.find(p => p.jobId === jobId && p.lawyerId === user.id && p.status !== 'REJECTED');
     if (existing) {
@@ -230,6 +241,39 @@ export const FindJobsPage: React.FC = () => {
   return (
     <div className="space-y-6 text-foreground animate-in fade-in duration-200">
       
+      {/* Educational Verification Status Banner for unverified lawyers */}
+      {role === 'LAWYER' && verificationStatus !== 'VERIFIED' && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                {verificationStatus === 'PENDING'
+                  ? 'Inscrição OAB em Análise'
+                  : verificationStatus === 'REJECTED'
+                  ? 'Cadastro OAB Rejeitado'
+                  : verificationStatus === 'SUSPENDED'
+                  ? 'Inscrição OAB Suspensa'
+                  : verificationStatus === 'EXPIRED'
+                  ? 'Certidão OAB Expirada'
+                  : 'Verificação OAB Obrigatória para Envio de Propostas'}
+              </h4>
+              <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5">
+                {verificationStatus === 'PENDING'
+                  ? 'Seus dados e documentos da OAB estão em análise pela nossa equipe. A submissão de propostas será liberada automaticamente após a homologação.'
+                  : 'Para garantir a segurança jurídica e regulatória da plataforma, é obrigatório validar suas credenciais da OAB antes de submeter propostas de honorários.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab('edit-profile')}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 transition-all cursor-pointer"
+          >
+            {verificationStatus === 'PENDING' ? 'Ver Status Cadastral' : 'Completar Verificação'}
+          </button>
+        </div>
+      )}
+
       {/* Header Banner with rounded corners and gradient */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 p-6 sm:p-8 rounded-3xl text-white border border-border-alt/60 shadow-lg relative overflow-hidden space-y-6">
         <div className="max-w-3xl space-y-2 relative z-10">
@@ -591,6 +635,80 @@ export const FindJobsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Educational Verification Blocking Modal */}
+      {isVerificationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-border/50">
+              <div className="flex items-center gap-2.5 text-amber-600">
+                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
+                  <ShieldAlert className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-base font-extrabold text-foreground">Verificação OAB Obrigatória</h3>
+              </div>
+              <button
+                onClick={() => setIsVerificationModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
+              <p>
+                O envio de propostas de honorários é exclusivo para advogados devidamente verificados e ativos na Ordem dos Advogados do Brasil (OAB).
+              </p>
+              <div className="p-3.5 bg-background rounded-2xl border border-border/60 space-y-1.5">
+                <span className="font-bold text-foreground block">Status Atual da Conta:</span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                    verificationStatus === 'PENDING'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : verificationStatus === 'REJECTED' || verificationStatus === 'SUSPENDED' || verificationStatus === 'EXPIRED'
+                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                      : 'bg-muted text-muted-foreground border border-border'
+                  }`}>
+                    {verificationStatus === 'PENDING'
+                      ? 'OAB Em Análise'
+                      : verificationStatus === 'REJECTED'
+                      ? 'Cadastro Rejeitado'
+                      : verificationStatus === 'SUSPENDED'
+                      ? 'OAB Suspensa'
+                      : verificationStatus === 'EXPIRED'
+                      ? 'OAB Expirada'
+                      : 'Cadastro Incompleto (DRAFT)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground pt-1">
+                  {verificationStatus === 'PENDING'
+                    ? 'Nossa equipe está analisando os dados da sua inscrição e certidão da OAB.'
+                    : 'Complete seus dados de inscrição OAB, estados de jurisdição e anexo de certidão para liberar o envio de propostas.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setIsVerificationModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-bold hover:bg-muted/80 transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  setIsVerificationModalOpen(false);
+                  setActiveTab('edit-profile');
+                }}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+              >
+                Ir para Validação de Perfil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

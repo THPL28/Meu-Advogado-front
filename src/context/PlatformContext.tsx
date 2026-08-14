@@ -9,7 +9,8 @@ import {
   DashboardMetrics,
   FullLawyerProfile,
   UserProfile,
-  Role
+  Role,
+  VerificationStatus
 } from '../types';
 import {
   jobsApi,
@@ -21,6 +22,7 @@ import {
   dashboardApi,
   chatApi,
   lawyersApi,
+  authApi,
   getStoredToken
 } from '../services/api';
 
@@ -58,6 +60,8 @@ interface PlatformContextType {
   openClientProfile: (clientId: string) => void;
   activeConversationId: string | null;
   setActiveConversationId: (id: string | null) => void;
+  verificationStatus?: VerificationStatus;
+  isVerifiedLawyer: boolean;
 
   // Sidebar & Layout State
   sidebarState: SidebarState;
@@ -320,14 +324,20 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setNotifications(prev => [newNotif, ...prev]);
   };
 
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
   const refreshData = async () => {
     try {
       const realLawyers = await lawyersApi.getLawyers().catch(() => []);
       const mappedLawyers = realLawyers.map(mapUserProfileToFullLawyer);
       setLawyers(mappedLawyers);
 
+      const user = await authApi.getCurrentUser().catch(() => null);
+      setCurrentUser(user);
+
       const token = getStoredToken();
-      if (token) {
+      const hasActiveSession = user !== null || Boolean(token);
+      if (hasActiveSession) {
         const [j, p, c, pay, d, n, m] = await Promise.all([
           jobsApi.getJobs().catch(() => []),
           proposalsApi.getProposals().catch(() => []),
@@ -386,6 +396,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
   };
 
+  const verificationStatus = currentUser?.verificationStatus;
+  const isVerifiedLawyer = currentUser?.role === 'LAWYER' && currentUser?.verificationStatus === 'VERIFIED';
+
   return (
     <PlatformContext.Provider value={{
       activeTab,
@@ -399,6 +412,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       openClientProfile,
       activeConversationId,
       setActiveConversationId,
+      verificationStatus,
+      isVerifiedLawyer,
       sidebarState,
       setSidebarState,
       toggleSidebar,

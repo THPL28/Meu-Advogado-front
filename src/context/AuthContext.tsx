@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserProfile, Role } from '../types';
+import { UserProfile, Role, VerificationStatus } from '../types';
 import { authApi } from '../services/api';
 
 interface RegisterData {
@@ -18,6 +18,8 @@ interface RegisterData {
 interface AuthContextType {
   user: UserProfile | null;
   role: Role;
+  verificationStatus?: VerificationStatus;
+  isVerifiedLawyer: boolean;
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
@@ -109,11 +111,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearError = useCallback(() => setError(null), []);
 
+  const verificationStatus = user?.verificationStatus;
+  const isVerifiedLawyer = user?.role === 'LAWYER' && user?.verificationStatus === 'VERIFIED';
+
   return (
     <AuthContext.Provider
       value={{
         user,
         role: user?.role || 'CLIENT',
+        verificationStatus,
+        isVerifiedLawyer,
         loading,
         error,
         login,

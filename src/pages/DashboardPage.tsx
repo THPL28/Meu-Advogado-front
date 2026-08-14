@@ -11,6 +11,8 @@ import {
   PlusCircle,
   ChevronRight,
   ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
   Sparkles,
   ArrowUpRight,
   Users
@@ -21,6 +23,7 @@ export const DashboardPage: React.FC = () => {
   const {
     user,
     role,
+    verificationStatus,
     jobs,
     proposals,
     contracts,
@@ -334,6 +337,61 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
       
+      {/* Prominent Onboarding / Verification Alert Banner */}
+      {role === 'LAWYER' && verificationStatus !== 'VERIFIED' && (
+        <div className="p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 border border-amber-500/30 text-foreground flex flex-col md:flex-row items-start md:items-center justify-between gap-5 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="text-base font-extrabold text-foreground">
+                  {verificationStatus === 'PENDING'
+                    ? 'Inscrição da OAB em Análise Cadastral'
+                    : verificationStatus === 'REJECTED'
+                    ? 'Cadastro OAB Rejeitado'
+                    : verificationStatus === 'SUSPENDED'
+                    ? 'Inscrição OAB Suspensa'
+                    : verificationStatus === 'EXPIRED'
+                    ? 'Certidão OAB Expirada'
+                    : 'Complete a Validação da sua OAB para Enviar Propostas'}
+                </h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                  verificationStatus === 'PENDING'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    : verificationStatus === 'REJECTED' || verificationStatus === 'SUSPENDED' || verificationStatus === 'EXPIRED'
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                    : 'bg-muted text-muted-foreground border border-border'
+                }`}>
+                  {verificationStatus === 'PENDING'
+                    ? 'OAB Em Análise'
+                    : verificationStatus === 'REJECTED'
+                    ? 'Cadastro Rejeitado'
+                    : verificationStatus === 'SUSPENDED'
+                    ? 'OAB Suspensa'
+                    : verificationStatus === 'EXPIRED'
+                    ? 'OAB Expirada'
+                    : 'Cadastro Incompleto (DRAFT)'}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-3xl">
+                {verificationStatus === 'PENDING'
+                  ? 'Seus documentos e número de inscrição na OAB foram enviados e estão sendo verificados por nosso time de compliance. Você receberá uma notificação assim que o cadastro for aprovado.'
+                  : 'Para submeter propostas em demandas públicas e receber honorários em custódia segura, informe seu número de OAB, UF de jurisdição e anexe o comprovante de regularidade.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab('edit-profile')}
+            className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md shrink-0 transition-all cursor-pointer flex items-center gap-2"
+          >
+            <span>{verificationStatus === 'PENDING' ? 'Acompanhar Validação' : 'Completar Verificação'}</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* KPI Stats Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         

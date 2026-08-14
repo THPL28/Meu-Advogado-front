@@ -20,7 +20,9 @@ import {
   FolderOpen,
   Settings,
   Plus,
-  Users
+  Users,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { ActiveTab } from '../../context/PlatformContext';
@@ -30,6 +32,48 @@ interface NavbarProps {
   setIsMobileMenuOpen?: (open: boolean) => void;
 }
 
+const getVerificationBadgeConfig = (status?: string) => {
+  switch (status) {
+    case 'VERIFIED':
+      return {
+        label: 'OAB Verificada',
+        className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
+        icon: ShieldCheck,
+      };
+    case 'PENDING':
+      return {
+        label: 'OAB Em Análise',
+        className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+        icon: AlertCircle,
+      };
+    case 'REJECTED':
+      return {
+        label: 'Cadastro Rejeitado',
+        className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+        icon: XCircle,
+      };
+    case 'SUSPENDED':
+      return {
+        label: 'OAB Suspensa',
+        className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+        icon: XCircle,
+      };
+    case 'EXPIRED':
+      return {
+        label: 'OAB Expirada',
+        className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+        icon: AlertCircle,
+      };
+    case 'DRAFT':
+    default:
+      return {
+        label: 'Cadastro Incompleto',
+        className: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+        icon: AlertCircle,
+      };
+  }
+};
+
 export const Navbar: React.FC<NavbarProps> = ({
   isMobileMenuOpen: externalMobileMenuOpen,
   setIsMobileMenuOpen: externalSetIsMobileMenuOpen
@@ -37,6 +81,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const {
     user,
     role,
+    verificationStatus,
     switchRole,
     activeTab,
     setActiveTab,
@@ -50,6 +95,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     setIsNewCaseModalOpen,
     setIsAiAssistantModalOpen
   } = useLegalPlatform();
+
+  const vBadge = getVerificationBadgeConfig(user?.verificationStatus || verificationStatus);
 
   const [internalMobileMenuOpen, setInternalMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -176,6 +223,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
           
+          {/* Dynamic Verification Badge for Lawyers */}
+          {role === 'LAWYER' && (
+            <button
+              onClick={() => setActiveTab('edit-profile')}
+              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${vBadge.className}`}
+              title="Clique para gerenciar sua verificação cadastral"
+            >
+              <vBadge.icon className="w-3.5 h-3.5" />
+              <span>{vBadge.label}</span>
+            </button>
+          )}
+
           {/* Role Switcher Toggle Badge */}
           <div className="hidden lg:flex items-center bg-muted p-1 rounded-xl border border-border">
             <button
@@ -277,10 +336,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="p-2 border-b border-border/50 mb-2">
                   <p className="text-xs font-bold text-foreground">{user?.name}</p>
                   <p className="text-xs text-muted-foreground/90 truncate">{user?.email}</p>
-                  {user?.oabNumber && (
+                  {role === 'LAWYER' ? (
+                    <div className="mt-2 flex items-center justify-between gap-1 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${vBadge.className}`}>
+                        <vBadge.icon className="w-3 h-3" />
+                        {vBadge.label}
+                      </span>
+                      {user?.oabNumber && (
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          OAB/{user.oabState} {user.oabNumber}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
                     <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      OAB/{user.oabState} {user.oabNumber} • Verificado
+                      Cliente Verificado
                     </div>
                   )}
                 </div>
@@ -456,6 +527,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div>
                   <p className="text-xs font-bold text-foreground">{user?.name}</p>
                   <p className="text-xs text-muted-foreground/90">{user?.email}</p>
+                  {role === 'LAWYER' && (
+                    <div className="mt-1">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${vBadge.className}`}>
+                        <vBadge.icon className="w-3 h-3" />
+                        {vBadge.label}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

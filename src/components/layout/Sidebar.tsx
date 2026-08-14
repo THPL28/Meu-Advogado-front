@@ -16,10 +16,54 @@ import {
   UserCheck,
   ChevronLeft,
   ChevronRight,
-  User
+  User,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { ActiveTab } from '../../context/PlatformContext';
+
+const getVerificationBadgeConfig = (status?: string) => {
+  switch (status) {
+    case 'VERIFIED':
+      return {
+        label: 'OAB Verificada',
+        className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
+        icon: ShieldCheck,
+      };
+    case 'PENDING':
+      return {
+        label: 'OAB Em Análise',
+        className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+        icon: AlertCircle,
+      };
+    case 'REJECTED':
+      return {
+        label: 'Cadastro Rejeitado',
+        className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+        icon: XCircle,
+      };
+    case 'SUSPENDED':
+      return {
+        label: 'OAB Suspensa',
+        className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+        icon: XCircle,
+      };
+    case 'EXPIRED':
+      return {
+        label: 'OAB Expirada',
+        className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+        icon: AlertCircle,
+      };
+    case 'DRAFT':
+    default:
+      return {
+        label: 'Cadastro Incompleto',
+        className: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+        icon: AlertCircle,
+      };
+  }
+};
 
 export const Sidebar: React.FC = () => {
   const {
@@ -27,6 +71,7 @@ export const Sidebar: React.FC = () => {
     setActiveTab,
     user,
     role,
+    verificationStatus,
     jobs,
     proposals,
     notifications,
@@ -37,6 +82,8 @@ export const Sidebar: React.FC = () => {
     sidebarState,
     toggleSidebar
   } = useLegalPlatform();
+
+  const vBadge = getVerificationBadgeConfig(user?.verificationStatus || verificationStatus);
 
   if (sidebarState === 'hidden') return null;
 
@@ -199,10 +246,19 @@ export const Sidebar: React.FC = () => {
             {!isCollapsed && (
               <div className="overflow-hidden min-w-0 flex-1">
                 <p className="text-xs font-bold text-foreground truncate">{user?.name}</p>
-                <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span className="truncate">{user?.role === 'LAWYER' ? 'Advogado Verificado' : 'Cliente Corporativo'}</span>
-                </div>
+                {user?.role === 'LAWYER' ? (
+                  <div className="flex items-center gap-1 text-[11px] font-semibold truncate mt-0.5">
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${vBadge.className}`}>
+                      <vBadge.icon className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{vBadge.label}</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate">Cliente Corporativo</span>
+                  </div>
+                )}
               </div>
             )}
           </div>

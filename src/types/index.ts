@@ -1,5 +1,7 @@
 export type Role = 'LAWYER' | 'CLIENT' | 'ADMIN';
 
+export type VerificationStatus = 'DRAFT' | 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'EXPIRED';
+
 export type JobStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'PAUSED' | 'CANCELLED';
 
 export type JobType = 'LITIGATION' | 'CONSULTING' | 'CONTRACT_REVIEW' | 'DUE_DILIGENCE' | 'COMPLIANCE' | 'INTELLECTUAL_PROPERTY';
@@ -210,6 +212,10 @@ export interface UserProfile {
   reviewCount: number;
   completedCasesCount: number;
   verifiedOab: boolean;
+  verificationStatus?: VerificationStatus;
+  oabExpiryDate?: string;
+  jurisdictionStates?: string[];
+  mfaEnabled?: boolean;
   city: string;
   state: string;
   joinedDate: string;
@@ -217,6 +223,8 @@ export interface UserProfile {
   lawyerWallet?: LawyerWallet;
   clientWallet?: ClientWallet;
 }
+
+export type User = UserProfile;
 
 export interface Specialty {
   id: string;

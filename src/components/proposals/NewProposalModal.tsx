@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileCheck2, DollarSign, Calendar, Clock, Plus, Trash2, Lock, AlertCircle, ShieldCheck } from 'lucide-react';
+import { X, FileCheck2, DollarSign, Calendar, Clock, Plus, Trash2, Lock, AlertCircle, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { proposalsApi } from '../../services/api';
 
@@ -11,6 +11,10 @@ export const NewProposalModal: React.FC = () => {
     jobs,
     proposals,
     user,
+    role,
+    verificationStatus,
+    isVerifiedLawyer,
+    setActiveTab,
     refreshData
   } = useLegalPlatform();
 
@@ -38,6 +42,8 @@ export const NewProposalModal: React.FC = () => {
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const isUnverifiedLawyer = role === 'LAWYER' && verificationStatus !== 'VERIFIED';
 
   // Check if lawyer has already sent a proposal for this job
   const hasAlreadySubmitted = user && selectedJob && proposals.some(
@@ -73,7 +79,7 @@ export const NewProposalModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (hasAlreadySubmitted) return;
+    if (isUnverifiedLawyer || hasAlreadySubmitted) return;
 
     setSubmitting(true);
     setErrorMessage('');
@@ -125,8 +131,49 @@ export const NewProposalModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Already Submitted Warning Banner */}
-        {hasAlreadySubmitted ? (
+        {/* Blocking Screen for Non-Verified Lawyers */}
+        {isUnverifiedLawyer ? (
+          <div className="mt-6 p-6 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-base font-extrabold text-foreground">
+                {verificationStatus === 'PENDING'
+                  ? 'Inscrição OAB em Análise'
+                  : verificationStatus === 'REJECTED'
+                  ? 'Cadastro OAB Não Aprovado'
+                  : verificationStatus === 'SUSPENDED'
+                  ? 'Inscrição OAB Suspensa'
+                  : verificationStatus === 'EXPIRED'
+                  ? 'Certidão OAB Expirada'
+                  : 'Validação de OAB Obrigatória'}
+              </h4>
+              <p className="text-xs text-muted-foreground leading-relaxed max-w-md mx-auto">
+                {verificationStatus === 'PENDING'
+                  ? 'Seu cadastro e certidão da OAB estão sob validação pela nossa equipe de compliance. Assim que a análise for concluída, você poderá submeter propostas para qualquer demanda pública.'
+                  : 'Por exigência regulatória e segurança das partes, advogados precisam cadastrar seu número de OAB, estados de jurisdição e anexar a certidão da OAB antes de enviar propostas de honorários.'}
+              </p>
+            </div>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => setIsNewProposalModalOpen(false)}
+                className="w-full sm:w-auto px-5 py-2.5 bg-muted text-muted-foreground text-xs font-bold rounded-xl cursor-pointer hover:bg-muted/80"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  setIsNewProposalModalOpen(false);
+                  setActiveTab('edit-profile');
+                }}
+                className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+              >
+                {verificationStatus === 'PENDING' ? 'Ver Status no Perfil' : 'Cadastrar Dados da OAB no Perfil'}
+              </button>
+            </div>
+          </div>
+        ) : hasAlreadySubmitted ? (
           <div className="mt-6 p-6 bg-amber-50 border border-amber-200 rounded-2xl space-y-3 text-center">
             <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
             <h4 className="text-sm font-extrabold text-amber-600 dark:text-amber-400">Você já enviou uma proposta para esta demanda</h4>

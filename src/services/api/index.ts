@@ -18,8 +18,10 @@
  */
 
 import { API_CONFIG } from '../../config/api';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 import {
   UserProfile,
+  VerificationStatus,
   Job,
   Proposal,
   Contract,
@@ -58,6 +60,9 @@ function setStorage<T>(key: string, value: T): void {
 }
 
 export function getStoredToken(): string | null {
+  if (FEATURE_FLAGS.auth.cookie_session_enabled) {
+    return null;
+  }
   try {
     return localStorage.getItem(API_CONFIG.storagePrefix + 'jwt_token');
   } catch {
@@ -66,6 +71,9 @@ export function getStoredToken(): string | null {
 }
 
 export function getStoredRefreshToken(): string | null {
+  if (FEATURE_FLAGS.auth.cookie_session_enabled) {
+    return null;
+  }
   try {
     return localStorage.getItem(API_CONFIG.storagePrefix + 'refresh_token');
   } catch {
@@ -74,6 +82,9 @@ export function getStoredRefreshToken(): string | null {
 }
 
 export function setStoredTokens(token?: string, refreshToken?: string): void {
+  if (FEATURE_FLAGS.auth.cookie_session_enabled) {
+    return;
+  }
   try {
     if (token) localStorage.setItem(API_CONFIG.storagePrefix + 'jwt_token', token);
     if (refreshToken) localStorage.setItem(API_CONFIG.storagePrefix + 'refresh_token', refreshToken);
@@ -97,7 +108,7 @@ let isRefreshing = false;
 
 async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_CONFIG.baseURL}${path}`;
-  const token = getStoredToken();
+  const token = FEATURE_FLAGS.auth.cookie_session_enabled ? null : getStoredToken();
   const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
   const res = await fetch(url, {
@@ -189,6 +200,34 @@ function mapBackendRoles(roles: string[]): Role {
 
 function mapBackendUser(raw: Record<string, unknown>): UserProfile {
   const role = mapBackendRoles((raw.roles as string[]) || []);
+
+  const rawStatus = (raw.verificationStatus || raw.verification_status) as VerificationStatus | undefined;
+  const verificationStatus: VerificationStatus = rawStatus
+    ? (String(rawStatus).toUpperCase() as VerificationStatus)
+    : (raw.verifiedOab || raw.oabNumber ? 'VERIFIED' : 'DRAFT');
+
+  let jurisdictionStates: string[] = [];
+  if (Array.isArray(raw.jurisdictionStates)) {
+    jurisdictionStates = raw.jurisdictionStates as string[];
+  } else if (Array.isArray(raw.jurisdiction_states)) {
+    jurisdictionStates = raw.jurisdiction_states as string[];
+  } else if (typeof raw.jurisdictionStates === 'string' && (raw.jurisdictionStates as string).trim()) {
+    try {
+      jurisdictionStates = JSON.parse(raw.jurisdictionStates as string);
+    } catch {
+      jurisdictionStates = (raw.jurisdictionStates as string).split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+  } else if (typeof raw.jurisdiction_states === 'string' && (raw.jurisdiction_states as string).trim()) {
+    try {
+      jurisdictionStates = JSON.parse(raw.jurisdiction_states as string);
+    } catch {
+      jurisdictionStates = (raw.jurisdiction_states as string).split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+  }
+
+  const oabExpiryDate = (raw.oabExpiryDate as string) || (raw.oab_expiry_date as string) || undefined;
+  const mfaEnabled = Boolean(raw.mfaEnabled ?? raw.mfa_enabled ?? false);
+
   return {
     id: String(raw.id ?? ''),
     name: `${raw.firstName ?? ''} ${raw.lastName ?? ''}`.trim() || (raw.name as string) || 'Usuário',
@@ -202,6 +241,10 @@ function mapBackendUser(raw: Record<string, unknown>): UserProfile {
     cpfCnpj: (raw.cpfCnpj as string) ?? '',
     oabNumber: (raw.oabNumber as string) ?? undefined,
     oabState: (raw.oabState as string) ?? undefined,
+    verificationStatus,
+    oabExpiryDate,
+    jurisdictionStates,
+    mfaEnabled,
     bio: (raw.bio as string) ?? (raw.description as string) ?? '',
     specialties: (raw.specialties as string[]) ?? [],
     skills: (raw.skills as string[]) ?? [],
@@ -209,7 +252,7 @@ function mapBackendUser(raw: Record<string, unknown>): UserProfile {
     rating: (raw.rating as number) ?? 5.0,
     reviewCount: (raw.reviewCount as number) ?? 0,
     completedCasesCount: (raw.completedCasesCount as number) ?? 0,
-    verifiedOab: Boolean(raw.verifiedOab ?? (raw.oabNumber ? true : false)),
+    verifiedOab: verificationStatus === 'VERIFIED',
     city: (raw.city as string) ?? (raw.location as string) ?? '',
     state: (raw.state as string) ?? '',
     joinedDate: raw.createdAt
@@ -481,6 +524,37 @@ export const authApi = {
       return updated;
     }
     throw new Error('Não autenticado');
+  },
+};
+
+export const onboardingApi = {
+  async submitLawyerOnboarding(data: {
+    oabNumber: string;
+    oabState: string;
+    oabExpiryDate?: string;
+    jurisdictionStates?: string[];
+    documentAttachmentPath?: string;
+  }): Promise<UserProfile> {
+    try {
+      const res = await http<any>('/api/users/lawyer/onboarding/submit', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      if (res) {
+        const user = mapBackendUser(res);
+        setStorage('current_user', user);
+        return user;
+      }
+    } catch (e) {
+      console.warn('Lawyer onboarding submit API call error:', e);
+    }
+    return await authApi.updateProfile({
+      oabNumber: data.oabNumber,
+      oabState: data.oabState,
+      oabExpiryDate: data.oabExpiryDate,
+      jurisdictionStates: data.jurisdictionStates,
+      verificationStatus: 'PENDING',
+    });
   },
 };
 

@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   DollarSign,
   ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
   FileText,
   Building2,
   Sparkles,
@@ -23,7 +25,11 @@ import {
   Phone,
   Mail,
   Check,
-  Users
+  Users,
+  FileBadge2,
+  UploadCloud,
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import {
@@ -33,11 +39,19 @@ import {
   Education,
   WorkExperience,
   Language,
-  Certificate
+  Certificate,
+  VerificationStatus
 } from '../../types';
+import { onboardingApi } from '../../services/api';
+
+const BRAZILIAN_UFS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+  'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+  'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+];
 
 export const ProfileEditPanel: React.FC = () => {
-  const { lawyers, selectedLawyerSlug, updateLawyerProfile, setActiveTab, role, user, jobs } = useLegalPlatform();
+  const { lawyers, selectedLawyerSlug, updateLawyerProfile, setActiveTab, role, user, jobs, verificationStatus } = useLegalPlatform();
 
   const emptyLawyer: FullLawyerProfile = {
     id: user?.id || '',
@@ -51,6 +65,9 @@ export const ProfileEditPanel: React.FC = () => {
     oabNumber: user?.oabNumber || '',
     oabState: user?.oabState || 'SP',
     verifiedOab: !!user?.verifiedOab,
+    verificationStatus: user?.verificationStatus || verificationStatus || 'DRAFT',
+    oabExpiryDate: user?.oabExpiryDate || '',
+    jurisdictionStates: user?.jurisdictionStates || (user?.oabState ? [user.oabState] : ['SP']),
     city: user?.city || '',
     state: user?.state || '',
     country: 'Brasil',
@@ -94,9 +111,17 @@ export const ProfileEditPanel: React.FC = () => {
 
   const currentLawyer = lawyers.find(l => l.slug === selectedLawyerSlug || l.id === user?.id) || lawyers[0] || emptyLawyer;
 
-  const [formData, setFormData] = useState<FullLawyerProfile>({ ...currentLawyer });
+  const [formData, setFormData] = useState<FullLawyerProfile>({
+    ...currentLawyer,
+    verificationStatus: user?.verificationStatus || currentLawyer.verificationStatus || 'DRAFT',
+    oabExpiryDate: user?.oabExpiryDate || currentLawyer.oabExpiryDate || '',
+    jurisdictionStates: user?.jurisdictionStates || currentLawyer.jurisdictionStates || (currentLawyer.oabState ? [currentLawyer.oabState] : ['SP']),
+  });
   const [activeTabSection, setActiveTabSection] = useState<'pessoal' | 'bio' | 'especialidades' | 'competencias' | 'formacao' | 'experiencia' | 'certificados' | 'idiomas' | 'portfolio' | 'redes' | 'disponibilidade'>('pessoal');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [documentAttachment, setDocumentAttachment] = useState<string>('certidao_regularidade_oab.pdf');
+  const [submittingOnboarding, setSubmittingOnboarding] = useState(false);
+  const [onboardingSuccessMessage, setOnboardingSuccessMessage] = useState('');
 
   const clientJobs = jobs.filter(j => j.clientName === user?.name || j.clientId === user?.id);
 
@@ -197,6 +222,45 @@ export const ProfileEditPanel: React.FC = () => {
     setTimeout(() => {
       setSavedSuccess(false);
     }, 2000);
+  };
+
+  const toggleJurisdictionState = (uf: string) => {
+    const current = formData.jurisdictionStates || [];
+    const exists = current.includes(uf);
+    const updated = exists ? current.filter(s => s !== uf) : [...current, uf];
+    setFormData({ ...formData, jurisdictionStates: updated });
+  };
+
+  const handleSubmitVerification = async () => {
+    if (!formData.oabNumber) {
+      alert('Por favor, informe seu número de inscrição na OAB.');
+      return;
+    }
+    setSubmittingOnboarding(true);
+    setOnboardingSuccessMessage('');
+    try {
+      await onboardingApi.submitLawyerOnboarding({
+        oabNumber: formData.oabNumber,
+        oabState: formData.oabState || 'SP',
+        oabExpiryDate: formData.oabExpiryDate,
+        jurisdictionStates: formData.jurisdictionStates || [formData.oabState || 'SP'],
+        documentAttachmentPath: documentAttachment,
+      });
+      const updatedUser = {
+        ...formData,
+        verificationStatus: 'PENDING' as VerificationStatus,
+        verifiedOab: false,
+      };
+      setFormData(updatedUser);
+      updateLawyerProfile(updatedUser);
+      setOnboardingSuccessMessage('Dados e documentos enviados com sucesso! Seu cadastro está em análise pela equipe de compliance (PENDING).');
+      setTimeout(() => setOnboardingSuccessMessage(''), 5000);
+    } catch (err: any) {
+      console.error('Error submitting onboarding:', err);
+      alert('Erro ao submeter verificação da OAB. Tente novamente.');
+    } finally {
+      setSubmittingOnboarding(false);
+    }
   };
 
   // Helper Array Reorder
@@ -463,10 +527,92 @@ export const ProfileEditPanel: React.FC = () => {
             
             {/* 1. Dados Pessoais & OAB */}
             {activeTabSection === 'pessoal' && (
-              <div className="space-y-5 animate-in fade-in">
+              <div className="space-y-6 animate-in fade-in">
+                
+                {/* Onboarding Success Banner */}
+                {onboardingSuccessMessage && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-3 text-emerald-800 text-xs font-bold animate-in fade-in">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span>{onboardingSuccessMessage}</span>
+                  </div>
+                )}
+
+                {/* Verification Status & Homologation Card */}
+                <div className="p-5 rounded-2xl bg-muted/40 border border-border/80 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl border ${
+                        formData.verificationStatus === 'VERIFIED'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/50 dark:border-emerald-800'
+                          : formData.verificationStatus === 'PENDING'
+                          ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/50 dark:border-amber-800'
+                          : formData.verificationStatus === 'REJECTED' || formData.verificationStatus === 'SUSPENDED' || formData.verificationStatus === 'EXPIRED'
+                          ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/50 dark:border-rose-800'
+                          : 'bg-muted text-muted-foreground border-border'
+                      }`}>
+                        {formData.verificationStatus === 'VERIFIED' ? (
+                          <ShieldCheck className="w-5 h-5" />
+                        ) : formData.verificationStatus === 'PENDING' ? (
+                          <AlertCircle className="w-5 h-5" />
+                        ) : (
+                          <ShieldAlert className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                          Status de Homologação Cadastral
+                        </span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${
+                            formData.verificationStatus === 'VERIFIED'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                              : formData.verificationStatus === 'PENDING'
+                              ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                              : formData.verificationStatus === 'REJECTED' || formData.verificationStatus === 'SUSPENDED' || formData.verificationStatus === 'EXPIRED'
+                              ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800'
+                              : 'bg-muted text-muted-foreground border-border'
+                          }`}>
+                            {formData.verificationStatus === 'VERIFIED'
+                              ? 'OAB Verificada'
+                              : formData.verificationStatus === 'PENDING'
+                              ? 'OAB Em Análise'
+                              : formData.verificationStatus === 'REJECTED'
+                              ? 'Cadastro Rejeitado'
+                              : formData.verificationStatus === 'SUSPENDED'
+                              ? 'OAB Suspensa'
+                              : formData.verificationStatus === 'EXPIRED'
+                              ? 'OAB Expirada'
+                              : 'Cadastro Incompleto (DRAFT)'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={submittingOnboarding}
+                      onClick={handleSubmitVerification}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                      {submittingOnboarding ? 'Enviando...' : 'Enviar p/ Homologação OAB'}
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {formData.verificationStatus === 'VERIFIED'
+                      ? 'Suas credenciais estão ativas e regularizadas. Você está apto a enviar propostas para todas as demandas e executar serviços com garantia Escrow.'
+                      : formData.verificationStatus === 'PENDING'
+                      ? 'Nossa equipe jurídica está validando seu número de inscrição, certidão de regularidade e estados de jurisdição. O prazo médio de análise é de poucas horas.'
+                      : formData.verificationStatus === 'EXPIRED'
+                      ? 'A certidão da OAB anexada atingiu o prazo de validade. Atualize a data de expiração e anexe o documento renovado para reativar o envio de propostas.'
+                      : 'Preencha o número da OAB, estado principal, data de validade, selecione as UFs de atuação suplementar e anexe a certidão para habilitar o envio de propostas.'}
+                  </p>
+                </div>
+
                 <h3 className="text-sm font-extrabold text-foreground uppercase tracking-wider pb-2 border-b border-border/50 flex items-center gap-2">
                   <User className="w-4 h-4 text-emerald-600" />
-                  Dados Pessoais, Foto e Credenciais
+                  Dados Pessoais e Credenciais da OAB
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -491,9 +637,10 @@ export const ProfileEditPanel: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Número da OAB</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de Inscrição da OAB</label>
                     <input
                       type="text"
+                      placeholder="Ex: 123456"
                       value={formData.oabNumber}
                       onChange={(e) => setFormData({ ...formData, oabNumber: e.target.value })}
                       className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 focus:bg-card focus:outline-none focus:border-emerald-600"
@@ -501,19 +648,31 @@ export const ProfileEditPanel: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">UF da OAB</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">UF Principal da OAB</label>
                     <select
                       value={formData.oabState}
-                      onChange={(e) => setFormData({ ...formData, oabState: e.target.value })}
+                      onChange={(e) => {
+                        const newUf = e.target.value;
+                        const currStates = formData.jurisdictionStates || [];
+                        const updated = currStates.includes(newUf) ? currStates : [newUf, ...currStates];
+                        setFormData({ ...formData, oabState: newUf, jurisdictionStates: updated });
+                      }}
                       className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:bg-card focus:outline-none focus:border-emerald-600"
                     >
-                      <option value="SP">São Paulo (SP)</option>
-                      <option value="RJ">Rio de Janeiro (RJ)</option>
-                      <option value="MG">Minas Gerais (MG)</option>
-                      <option value="RS">Rio Grande do Sul (RS)</option>
-                      <option value="PR">Paraná (PR)</option>
-                      <option value="DF">Distrito Federal (DF)</option>
+                      {BRAZILIAN_UFS.map(uf => (
+                        <option key={uf} value={uf}>{uf}</option>
+                      ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Data de Validade / Expiração da Certidão OAB</label>
+                    <input
+                      type="date"
+                      value={formData.oabExpiryDate || ''}
+                      onChange={(e) => setFormData({ ...formData, oabExpiryDate: e.target.value })}
+                      className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:bg-card focus:outline-none focus:border-emerald-600"
+                    />
                   </div>
 
                   <div>
@@ -524,6 +683,69 @@ export const ProfileEditPanel: React.FC = () => {
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                       className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:bg-card focus:outline-none focus:border-emerald-600"
                     />
+                  </div>
+
+                  {/* Estados de Jurisdição Suplementar (Tag Selector) */}
+                  <div className="sm:col-span-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-muted-foreground">
+                        Estados de Atuação & Jurisdição Suplementar (UFs)
+                      </label>
+                      <span className="text-[11px] text-muted-foreground">
+                        {(formData.jurisdictionStates || []).length} UF(s) selecionada(s)
+                      </span>
+                    </div>
+                    <div className="p-3 bg-background border border-border rounded-2xl flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                      {BRAZILIAN_UFS.map(uf => {
+                        const isSelected = (formData.jurisdictionStates || []).includes(uf) || formData.oabState === uf;
+                        return (
+                          <button
+                            type="button"
+                            key={uf}
+                            onClick={() => toggleJurisdictionState(uf)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-card text-muted-foreground border border-border/80 hover:bg-muted'
+                            }`}
+                          >
+                            {uf}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Document Upload Attachment Path */}
+                  <div className="sm:col-span-2 space-y-2">
+                    <label className="block text-xs font-semibold text-muted-foreground">
+                      Anexo da Certidão / Comprovante de Regularidade da OAB
+                    </label>
+                    <div className="p-4 bg-background border border-dashed border-border rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
+                          <FileBadge2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-foreground font-mono">{documentAttachment}</p>
+                          <p className="text-[11px] text-muted-foreground">Documento digitalizado em PDF autenticado (máx 15MB)</p>
+                        </div>
+                      </div>
+                      <label className="px-4 py-2 rounded-xl bg-card border border-border text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer flex items-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Substituir Arquivo</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              setDocumentAttachment(e.target.files[0].name);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
                   </div>
 
                   <div>
