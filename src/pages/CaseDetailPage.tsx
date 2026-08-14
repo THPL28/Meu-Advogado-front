@@ -4,11 +4,10 @@ import {
   FileText,
   Calendar,
   Clock,
-  UserCheck,
   ShieldCheck,
+  ShieldAlert,
   Upload,
   Sparkles,
-  CreditCard,
   PlusCircle,
   Download,
   CheckCircle2,
@@ -20,12 +19,9 @@ import {
   Star,
   Lock,
   ArrowLeft,
-  ArrowRight,
   Building2,
-  Share2,
   Heart,
-  Flag,
-  DollarSign
+  EyeOff
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
 import { proposalsApi, contractsApi } from '../services/api';
@@ -112,14 +108,14 @@ export const CaseDetailPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'PROPOSALS' | 'DOCUMENTS' | 'TIMELINE' | 'PAYMENTS' | 'CONTRACT'>(caseDetailInitialTab);
   const [isFavorited, setIsFavorited] = useState(false);
-  const [copiedShare, setCopiedShare] = useState(false);
 
   useEffect(() => {
     setActiveTab(caseDetailInitialTab);
   }, [caseDetailInitialTab]);
 
-  const job = jobs.find((j) => j.id === selectedCaseId) || jobs[0];
+  const job = jobs.find((j) => String(j.id) === String(selectedCaseId)) || (jobs.length > 0 ? jobs[0] : null);
 
+  // 403 Forbidden / Not Found handler with clear guidance
   if (!job) {
     return (
       <div className="space-y-6 animate-in fade-in duration-200">
@@ -134,41 +130,46 @@ export const CaseDetailPage: React.FC = () => {
         </div>
 
         <div className="bg-card border border-border/80 rounded-2xl sm:rounded-3xl p-12 text-center shadow-xs space-y-4 max-w-lg mx-auto">
-          <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto text-muted-foreground">
-            <Briefcase className="w-6 h-6" />
+          <div className="w-14 h-14 bg-amber-500/10 text-amber-600 rounded-full flex items-center justify-center mx-auto border border-amber-500/30">
+            <Lock className="w-7 h-7" />
           </div>
-          <h2 className="text-lg font-bold text-foreground">Demanda não encontrada ou indisponível.</h2>
-          <p className="text-xs text-muted-foreground">A demanda solicitada não existe ou foi removida do sistema.</p>
-          <button
-            onClick={() => setNavTab(role === 'LAWYER' ? 'find-jobs' : 'cases')}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-          >
-            Voltar para {role === 'LAWYER' ? 'Demandas' : 'Painel de Casos'}
-          </button>
+          <h2 className="text-lg font-bold text-foreground">Demanda Privada ou Acesso Restrito</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Esta demanda jurídica é estritamente confidencial ou não está disponível para o seu usuário (HTTP 403 Forbidden). Apenas as partes envolvidas e advogados formalmente habilitados podem visualizar os autos completos.
+          </p>
+          <div className="pt-2">
+            <button
+              onClick={() => setNavTab(role === 'LAWYER' ? 'find-jobs' : 'cases')}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              Voltar ao Catálogo de Descoberta
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  let caseProposals = proposals.filter((p) => p.jobId === job?.id);
+  let caseProposals = proposals.filter((p) => String(p.jobId) === String(job.id));
   if (role === 'LAWYER' && user) {
     caseProposals = caseProposals.filter((p) => p.lawyerId === user.id);
   }
   
-  const caseContract = contracts.find((c) => c.jobId === job?.id);
-  const caseDocs = documents.filter((d) => d.processNumber === job?.processNumber || d.category === 'Peças Processuais');
-  const casePayments = payments.filter((p) => p.processNumber === job?.processNumber);
+  const caseContract = contracts.find((c) => String(c.jobId) === String(job.id));
+  const caseDocs = documents.filter((d) => (job.processNumber && d.processNumber === job.processNumber) || d.category === 'Peças Processuais');
+  const casePayments = payments.filter((p) => job.processNumber && p.processNumber === job.processNumber);
 
   const myProposal = user ? caseProposals.find(p => p.lawyerId === user.id) : null;
 
-  const isContractedOrAssumed = !!caseContract || job.status !== 'OPEN';
-  const isMyAssumedJob = role === 'CLIENT' || (job.assignedLawyerId && user && job.assignedLawyerId === user.id);
+  // Participant authorization check (LGPD & Privacy Rules)
+  const isClientOwner = role === 'CLIENT' && (String(job.clientId) === String(user?.id) || !job.clientId);
+  const isAssignedLawyer = role === 'LAWYER' && user && String(job.assignedLawyerId) === String(user.id);
+  const isContractedLawyer = role === 'LAWYER' && user && caseContract && String(caseContract.lawyerId) === String(user.id);
+  const hasAcceptedProposal = myProposal && myProposal.status === 'ACCEPTED';
+  const isAuthorized = role === 'ADMIN' || isClientOwner || isAssignedLawyer || isContractedLawyer || hasAcceptedProposal;
 
-  const handleShare = () => {
-    navigator.clipboard?.writeText?.(window.location.href);
-    setCopiedShare(true);
-    setTimeout(() => setCopiedShare(false), 2000);
-  };
+  const isContractedOrAssumed = !!caseContract || job.status !== 'OPEN';
+  const isMyAssumedJob = isClientOwner || isAssignedLawyer;
 
   const handleAcceptProposal = async (proposalId: string) => {
     try {
@@ -196,7 +197,7 @@ export const CaseDetailPage: React.FC = () => {
     try {
       const updated = await contractsApi.releaseMilestone(caseContract.id, milestoneId);
       await refreshData();
-      if (updated.status === 'COMPLETED') {
+      if (updated && updated.status === 'COMPLETED') {
         openReviewModal({
           contractId: updated.id,
           jobTitle: updated.jobTitle,
@@ -223,6 +224,35 @@ export const CaseDetailPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Prominent Confidentiality & Secrecy Notice Banner */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white border border-emerald-500/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 shrink-0 mt-0.5 border border-emerald-500/30">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-sm font-extrabold text-white">Aviso de Confidencialidade e Sigilo Processual</h4>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/30">
+                Sigilo Legal & LGPD
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+              Demanda Jurídica Protegida — Informações processuais completas, dados de qualificação e documentos confidenciais são restritos às partes contratantes e advogados autorizados.
+            </p>
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <span className={`text-[11px] font-mono font-bold px-3 py-1.5 rounded-xl border ${
+            isAuthorized
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+              : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+          }`}>
+            {isAuthorized ? '✓ Participante Autorizado' : '🔒 Consulta Pública Sanitizada'}
+          </span>
+        </div>
+      </div>
+
       {/* Top Banner / Case Title Header */}
       <div className="bg-card border border-border/80 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
         
@@ -243,7 +273,7 @@ export const CaseDetailPage: React.FC = () => {
               {/* Hiring Modality Badge */}
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-muted text-muted-foreground border border-border flex items-center gap-1">
                 <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                Modalidade: {job.hiringType || 'Preço Fixo'}
+                Modalidade: {job.hiringType === 'HOURLY' ? 'Honorários por Hora' : 'Preço Fixo'}
               </span>
 
               {/* Proposals Count Badge */}
@@ -254,25 +284,39 @@ export const CaseDetailPage: React.FC = () => {
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-2">{job.title}</h1>
-            {job.processNumber && (
-              <p className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                Processo nº <span>{job.processNumber}</span>
+            
+            {/* Process Number: Protected if unauthorized */}
+            {isAuthorized && job.processNumber ? (
+              <p className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                <span>Processo nº {job.processNumber}</span>
+              </p>
+            ) : (
+              <p className="text-xs font-mono text-muted-foreground flex items-center gap-1.5">
+                <EyeOff className="w-3.5 h-3.5 text-muted-foreground/80" />
+                <span>Número Processual: <strong className="text-foreground/80 font-mono">[Oculto — Disponível após contratação]</strong></span>
               </p>
             )}
 
             {/* Client Profile link */}
             <div className="pt-2">
-              <button
-                onClick={() => openClientProfile(job.clientId)}
-                className="text-xs font-bold text-muted-foreground/90 hover:text-emerald-600 dark:text-emerald-400 flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                {job.clientAvatar ? (
-                  <img src={job.clientAvatar} alt={job.clientName} className="w-5 h-5 rounded-full object-cover" />
-                ) : (
-                  <Building2 className="w-4 h-4 text-muted-foreground/90" />
-                )}
-                <span>Cliente: <strong className="underline">{job.clientName}</strong> ({job.city}, {job.state})</span>
-              </button>
+              {isAuthorized ? (
+                <button
+                  onClick={() => openClientProfile(job.clientId)}
+                  className="text-xs font-bold text-muted-foreground/90 hover:text-emerald-600 dark:text-emerald-400 flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  {job.clientAvatar ? (
+                    <img src={job.clientAvatar} alt={job.clientName} className="w-5 h-5 rounded-full object-cover" />
+                  ) : (
+                    <Building2 className="w-4 h-4 text-muted-foreground/90" />
+                  )}
+                  <span>Cliente: <strong className="underline">{job.clientName}</strong> ({job.city}, {job.state})</span>
+                </button>
+              ) : (
+                <div className="text-xs font-bold text-muted-foreground/90 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Cliente Corporativo Verificado ({job.city || 'São Paulo'}, {job.state || 'SP'})</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -303,7 +347,7 @@ export const CaseDetailPage: React.FC = () => {
               <Sparkles className="w-4 h-4 text-emerald-600" /> Análise IA
             </button>
 
-            {isMyAssumedJob && (
+            {isAuthorized && isMyAssumedJob && (
               <button
                 onClick={() => setIsUploadDocModalOpen(true)}
                 className="px-4 py-2.5 bg-muted hover:bg-muted/80 border border-border text-foreground/90 font-semibold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer"
@@ -322,8 +366,12 @@ export const CaseDetailPage: React.FC = () => {
                 <CheckCircle2 className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Sua proposta foi enviada em {new Date(myProposal.createdAt).toLocaleDateString('pt-BR')}</p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">Valor Proposto: <strong className="font-mono">R$ {myProposal.value.toLocaleString('pt-BR')}</strong> • Status: {myProposal.status === 'ACCEPTED' ? 'Aceita pelo Cliente' : 'Em Análise pelo Cliente'}</p>
+                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  Sua proposta (v{myProposal.proposalVersion || 1}) foi enviada em {new Date(myProposal.createdAt).toLocaleDateString('pt-BR')}
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  Valor Proposto: <strong className="font-mono">R$ {myProposal.value.toLocaleString('pt-BR')}</strong> • Status: {myProposal.status === 'ACCEPTED' ? 'Aceita pelo Cliente' : 'Em Análise pelo Cliente'}
+                </p>
               </div>
             </div>
 
@@ -393,7 +441,7 @@ export const CaseDetailPage: React.FC = () => {
                 : 'bg-muted text-muted-foreground/90 hover:text-foreground hover:bg-muted/80'
             }`}
           >
-            Documentos ({caseDocs.length})
+            Documentos ({isAuthorized ? caseDocs.length : 'Sigilosos'})
           </button>
 
           {isContractedOrAssumed && (
@@ -447,32 +495,47 @@ export const CaseDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Parties Involved */}
+              {/* Parties Involved: Protected for Non-Authorized */}
               <div className="p-6 sm:p-8 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
-                <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">Partes do Processo & Representantes Legais</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {job.parties ? (
-                    job.parties.map((party, i) => (
-                      <div key={i} className="p-4 bg-background/80 rounded-2xl border border-border/80 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-foreground">{party.name}</span>
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                            party.role === 'AUTOR' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}>
-                            {party.role}
-                          </span>
+                <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">
+                  Partes do Processo & Representantes Legais
+                </h3>
+
+                {isAuthorized ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {job.parties && job.parties.length > 0 ? (
+                      job.parties.map((party, i) => (
+                        <div key={i} className="p-4 bg-background/80 rounded-2xl border border-border/80 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-foreground">{party.name}</span>
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                              party.role === 'AUTOR' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {party.role}
+                            </span>
+                          </div>
+                          {party.lawyer && (
+                            <p className="text-xs text-muted-foreground/90">Advogado: {party.lawyer}</p>
+                          )}
                         </div>
-                        {party.lawyer && (
-                          <p className="text-xs text-muted-foreground/90">Advogado: {party.lawyer}</p>
-                        )}
+                      ))
+                    ) : (
+                      <div className="col-span-2 p-4 text-center text-xs text-muted-foreground/90">
+                        Cliente: {job.clientName}
                       </div>
-                    ))
-                  ) : (
-                    <div className="col-span-2 p-4 text-center text-xs text-muted-foreground/90">
-                      Cliente: {job.clientName}
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-6 bg-background/80 rounded-2xl border border-border/80 text-center space-y-2">
+                    <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center mx-auto text-muted-foreground">
+                      <Lock className="w-5 h-5" />
                     </div>
-                  )}
-                </div>
+                    <h4 className="text-sm font-bold text-foreground">Identidade das Partes Protegida por Sigilo</h4>
+                    <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                      A qualificação completa das partes, números de documentos e histórico processual detalhado são confidenciais e serão liberados exclusivamente para o advogado formalmente contratado.
+                    </p>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -520,6 +583,11 @@ export const CaseDetailPage: React.FC = () => {
                               <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
                                 {prop.lawyerName}
                                 <span className="text-xs text-emerald-600 dark:text-emerald-400 font-mono">({prop.lawyerOab})</span>
+                                {prop.proposalVersion && prop.proposalVersion > 1 && (
+                                  <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-bold text-[10px]">
+                                    v{prop.proposalVersion}
+                                  </span>
+                                )}
                                 {isMyOwn && (
                                   <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-bold text-[10px]">Sua Proposta</span>
                                 )}
@@ -749,32 +817,57 @@ export const CaseDetailPage: React.FC = () => {
             <div className="p-6 sm:p-8 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">Peças & Anexos Vinculados</h3>
-                <button
-                  onClick={() => setIsUploadDocModalOpen(true)}
-                  className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <PlusCircle className="w-4 h-4" /> Adicionar Documento
-                </button>
+                {isAuthorized && isMyAssumedJob && (
+                  <button
+                    onClick={() => setIsUploadDocModalOpen(true)}
+                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4" /> Adicionar Documento
+                  </button>
+                )}
               </div>
 
-              <div className="divide-y divide-border/50">
-                {caseDocs.map((doc) => (
-                  <div key={doc.id} className="py-3.5 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-muted text-emerald-600 dark:text-emerald-400">
-                        <FileText className="w-5 h-5" />
+              {isAuthorized ? (
+                <div className="divide-y divide-border/50">
+                  {caseDocs.map((doc) => (
+                    <div key={doc.id} className="py-3.5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-muted text-emerald-600 dark:text-emerald-400">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-foreground">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground/90">{doc.fileName} • {doc.fileSize} • {doc.uploadDate}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-foreground">{doc.title}</p>
-                        <p className="text-xs text-muted-foreground/90">{doc.fileName} • {doc.fileSize} • {doc.uploadDate}</p>
-                      </div>
+                      <button className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer">
+                        <Download className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer">
-                      <Download className="w-4 h-4" />
-                    </button>
+                  ))}
+                  {caseDocs.length === 0 && (
+                    <p className="text-xs text-muted-foreground py-6 text-center">Nenhum documento anexado a este processo.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-background/80 rounded-2xl border border-border space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
+                    <Lock className="w-6 h-6" />
                   </div>
-                ))}
-              </div>
+                  <h4 className="text-sm font-bold text-foreground">Documentos e Peças Processuais em Sigilo</h4>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                    O acesso a petições, procurações e documentos probatórios é protegido por sigilo profissional e reservado às partes contratantes. Submeta sua proposta de honorários para concorrer ao patrocínio da causa.
+                  </p>
+                  {role === 'LAWYER' && job.status === 'OPEN' && !myProposal && (
+                    <button
+                      onClick={() => setIsNewProposalModalOpen(true)}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer mt-2"
+                    >
+                      Submeter Proposta de Honorários
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -828,25 +921,37 @@ export const CaseDetailPage: React.FC = () => {
           {/* Client Profile Card */}
           <div className="p-6 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
             <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">Cliente da Demanda</h3>
-            <button
-              onClick={() => openClientProfile(job.clientId)}
-              className="w-full flex items-center gap-3 p-3 bg-background hover:bg-emerald-50/50 border border-border/80 hover:border-emerald-300 rounded-2xl transition-all cursor-pointer text-left group"
-            >
-              {job.clientAvatar ? (
-                <img src={job.clientAvatar} alt={job.clientName} className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30 shrink-0" />
-              ) : (
-                <div className="w-12 h-12 rounded-2xl bg-muted/80 flex items-center justify-center font-bold text-muted-foreground/90 shrink-0">
-                  {job.clientName.charAt(0)}
+            {isAuthorized ? (
+              <button
+                onClick={() => openClientProfile(job.clientId)}
+                className="w-full flex items-center gap-3 p-3 bg-background hover:bg-emerald-50/50 border border-border/80 hover:border-emerald-300 rounded-2xl transition-all cursor-pointer text-left group"
+              >
+                {job.clientAvatar ? (
+                  <img src={job.clientAvatar} alt={job.clientName} className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30 shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-muted/80 flex items-center justify-center font-bold text-muted-foreground/90 shrink-0">
+                    {job.clientName.charAt(0)}
+                  </div>
+                )}
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-bold text-foreground group-hover:text-emerald-600 dark:text-emerald-400 transition-colors truncate">{job.clientName}</p>
+                  <p className="text-xs text-muted-foreground/90 flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> {job.clientRating || '4.9'} • CNPJ Verificado
+                  </p>
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold underline block pt-0.5">Ver Perfil Completo do Cliente →</span>
                 </div>
-              )}
-              <div className="space-y-0.5 min-w-0">
-                <p className="text-sm font-bold text-foreground group-hover:text-emerald-600 dark:text-emerald-400 transition-colors truncate">{job.clientName}</p>
-                <p className="text-xs text-muted-foreground/90 flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> {job.clientRating || '4.9'} • CNPJ Verificado
+              </button>
+            ) : (
+              <div className="p-4 bg-background rounded-2xl border border-border/80 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-600">
+                  <ShieldCheck className="w-5 h-5" />
+                  <span className="text-xs font-bold text-foreground">Cliente Corporativo Verificado</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Identidade corporativa protegida durante a fase de descoberta. O contato direto é liberado após o aceite da proposta.
                 </p>
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold underline block pt-0.5">Ver Perfil Completo do Cliente →</span>
               </div>
-            </button>
+            )}
           </div>
 
           {/* Assigned Lawyer Info (Only shown when a lawyer has been assigned/hired) */}

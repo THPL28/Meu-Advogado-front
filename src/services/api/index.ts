@@ -37,6 +37,15 @@ import {
   Role,
   Review,
   ContractStatus,
+  VisibilityLevel,
+  SensitivityLevel,
+  ModerationStatus,
+  JobDiscoveryDto,
+  PaginatedResponse,
+  NegotiationMessage,
+  NegotiationThread,
+  UrgencyLevel,
+  ConfidentialityLevel,
 } from '../../types';
 
 // ─────────────────────────────────────────────
@@ -177,9 +186,32 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
         errMsg = errBody.error;
       } else if (typeof errBody.message === 'string' && errBody.message) {
         errMsg = errBody.message;
+      } else if (typeof errBody.detail === 'string' && errBody.detail) {
+        errMsg = errBody.detail;
       }
     } catch { /* ignore */ }
-    throw new Error(errMsg);
+
+    // Specific handling for 409 Conflict (e.g. duplicate active proposal)
+    if (res.status === 409) {
+      const conflictMsg = errMsg !== 'Erro 409' ? errMsg : 'Você já possui uma proposta ativa para esta demanda. Acesse "Propostas Enviadas" para editar ou negociar com o cliente.';
+      const conflictErr = new Error(conflictMsg);
+      (conflictErr as any).status = 409;
+      (conflictErr as any).isConflict = true;
+      throw conflictErr;
+    }
+
+    // Specific handling for 422 Unprocessable Entity (e.g. content moderation violation)
+    if (res.status === 422) {
+      const modMsg = errMsg !== 'Erro 422' ? errMsg : 'O conteúdo inserido viola as diretrizes de moderação (detecção de dados de contato, número de processo CNJ ou links externos).';
+      const modErr = new Error(modMsg);
+      (modErr as any).status = 422;
+      (modErr as any).isUnprocessable = true;
+      throw modErr;
+    }
+
+    const err = new Error(errMsg);
+    (err as any).status = res.status;
+    throw err;
   }
 
   const json = await res.json();
@@ -280,8 +312,67 @@ function mapBackendUser(raw: Record<string, unknown>): UserProfile {
   };
 }
 
+export function mapBackendDiscoveryJob(raw: Record<string, unknown>): JobDiscoveryDto {
+  const budgetMin = Number(raw.budgetMin ?? raw.budget ?? raw.estimatedValue ?? 0);
+  const budgetMax = Number(raw.budgetMax ?? raw.budget ?? raw.estimatedValue ?? budgetMin);
+  const urgencyRaw = String(raw.urgency || 'MEDIUM').toUpperCase();
+  const urgency: UrgencyLevel = (
+    urgencyRaw === 'LOW' || urgencyRaw === 'MEDIUM' || urgencyRaw === 'HIGH' || urgencyRaw === 'CRITICAL'
+      ? urgencyRaw
+      : 'MEDIUM'
+  ) as UrgencyLevel;
+
+  const visibilityRaw = String(raw.visibility || 'DISCOVERY_SANITIZED').toUpperCase();
+  const visibility: VisibilityLevel = (
+    visibilityRaw === 'PRIVATE' || visibilityRaw === 'INVITE_ONLY' || visibilityRaw === 'DISCOVERY_SANITIZED'
+      ? visibilityRaw
+      : 'DISCOVERY_SANITIZED'
+  ) as VisibilityLevel;
+
+  const statusRaw = String(raw.status || 'OPEN').toUpperCase();
+  const status: JobStatus = (
+    statusRaw === 'OPEN' || statusRaw === 'IN_PROGRESS' || statusRaw === 'COMPLETED' || statusRaw === 'PAUSED' || statusRaw === 'CANCELLED'
+      ? statusRaw
+      : 'OPEN'
+  ) as JobStatus;
+
+  const modRaw = raw.moderationStatus ? String(raw.moderationStatus).toUpperCase() : 'APPROVED';
+  const moderationStatus: ModerationStatus = (
+    modRaw === 'PENDING_REVIEW' || modRaw === 'APPROVED' || modRaw === 'REJECTED' || modRaw === 'FLAGGED'
+      ? modRaw
+      : 'APPROVED'
+  ) as ModerationStatus;
+
+  const hiringType = (raw.budgetType === 'HOURLY' || raw.hiringType === 'HOURLY' || raw.jobType === 'Hourly')
+    ? 'HOURLY'
+    : 'FIXED';
+
+  return {
+    id: String(raw.id ?? raw.jobId ?? ''),
+    title: (raw.title as string) || 'Demanda Jurídica',
+    specialty: (raw.specialtyName as string) || ((raw.specialty as any)?.name as string) || (raw.specialty as string) || 'Direito Empresarial',
+    urgency,
+    budgetMin,
+    budgetMax,
+    city: (raw.locationCity as string) || (raw.city as string) || '',
+    state: (raw.locationState as string) || (raw.state as string) || '',
+    createdAt: (raw.createdAt as string) || new Date().toISOString(),
+    visibility,
+    status,
+    moderationStatus,
+    proposalsCount: Number(raw.proposalsCount ?? (Array.isArray(raw.proposals) ? raw.proposals.length : 0)),
+    hiringType,
+  };
+}
+
 function mapBackendJob(raw: Record<string, unknown>): Job {
   const budgetVal = Number(raw.budget || raw.estimatedValue || 0);
+  const budgetMin = Number(raw.budgetMin ?? budgetVal);
+  const budgetMax = Number(raw.budgetMax ?? budgetVal);
+  const visibilityRaw = (raw.visibility as string)?.toUpperCase();
+  const sensitivityRaw = (raw.sensitivity as string)?.toUpperCase();
+  const modRaw = (raw.moderationStatus as string)?.toUpperCase();
+
   return {
     id: String(raw.jobId ?? raw.id ?? ''),
     title: (raw.title as string) || 'Demanda Jurídica',
@@ -295,8 +386,11 @@ function mapBackendJob(raw: Record<string, unknown>): Job {
     status: ((raw.status as string)?.toUpperCase() as JobStatus) || 'OPEN',
     urgency: ((raw.urgency as string)?.toUpperCase() as any) || 'MEDIUM',
     confidentiality: ((raw.confidentiality as string)?.toUpperCase() as any) || 'STANDARD',
-    budgetMin: budgetVal,
-    budgetMax: budgetVal,
+    visibility: (visibilityRaw === 'PRIVATE' || visibilityRaw === 'INVITE_ONLY' || visibilityRaw === 'DISCOVERY_SANITIZED') ? (visibilityRaw as VisibilityLevel) : undefined,
+    sensitivity: (sensitivityRaw === 'STANDARD' || sensitivityRaw === 'CONFIDENTIAL' || sensitivityRaw === 'STRICTLY_CONFIDENTIAL') ? (sensitivityRaw as SensitivityLevel) : undefined,
+    moderationStatus: (modRaw === 'PENDING_REVIEW' || modRaw === 'APPROVED' || modRaw === 'REJECTED' || modRaw === 'FLAGGED') ? (modRaw as ModerationStatus) : undefined,
+    budgetMin,
+    budgetMax,
     estimatedDeadlineDays: raw.deadline ? Math.max(1, Math.round((new Date(raw.deadline as string).getTime() - Date.now()) / 86400000)) : 30,
     createdAt: (raw.createdAt as string) || new Date().toISOString(),
     updatedAt: (raw.updatedAt as string) || (raw.lastModifiedAt as string) || new Date().toISOString(),
@@ -334,6 +428,8 @@ function mapBackendProposal(raw: Record<string, unknown>): Proposal {
     deliveryDays: Number(raw.proposedDuration || 30),
     coverLetter: (raw.coverLetter as string) || (raw.strategy as string) || '',
     status: ((raw.status as string)?.toUpperCase() as ProposalStatus) || 'PENDING',
+    proposalVersion: raw.proposalVersion !== undefined ? Number(raw.proposalVersion) : (raw.proposal_version !== undefined ? Number(raw.proposal_version) : 1),
+    negotiationThreadId: raw.negotiationThreadId ? String(raw.negotiationThreadId) : (raw.negotiation_thread_id ? String(raw.negotiation_thread_id) : undefined),
     createdAt: (raw.createdAt as string) || new Date().toISOString(),
     proposedMilestones: [
       {
@@ -562,6 +658,62 @@ export const onboardingApi = {
 // SECTION 5 – JOBS API
 // ─────────────────────────────────────────────
 export const jobsApi = {
+  // Canonical Phase 2 Sanitized Discovery Endpoint
+  async getDiscoveryCases(params?: {
+    page?: number;
+    size?: number;
+    specialty?: string | number;
+    urgency?: string;
+    state?: string;
+  }): Promise<PaginatedResponse<JobDiscoveryDto>> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.page !== undefined) query.append('page', String(params.page));
+      if (params?.size !== undefined) query.append('size', String(params.size));
+      if (params?.specialty && params.specialty !== 'ALL' && params.specialty !== 'Todos') {
+        query.append('specialty', String(params.specialty));
+      }
+      if (params?.urgency && params.urgency !== 'ALL') query.append('urgency', params.urgency);
+      if (params?.state && params.state !== 'ALL') query.append('state', params.state);
+
+      const qs = query.toString() ? `?${query.toString()}` : '';
+      const res = await http<any>(`/api/cases/discovery${qs}`);
+
+      // Handles Spring Page response
+      if (res && Array.isArray(res.content)) {
+        return {
+          content: res.content.map(mapBackendDiscoveryJob),
+          totalElements: typeof res.totalElements === 'number' ? res.totalElements : res.content.length,
+          totalPages: typeof res.totalPages === 'number' ? res.totalPages : 1,
+          size: typeof res.size === 'number' ? res.size : (params?.size || 10),
+          number: typeof res.number === 'number' ? res.number : (params?.page || 0),
+          first: res.first ?? ((params?.page || 0) === 0),
+          last: res.last ?? (typeof res.totalPages === 'number' ? ((params?.page || 0) >= res.totalPages - 1) : true),
+        };
+      } else if (Array.isArray(res)) {
+        // Fallback if backend returns a direct List<JobDiscoveryDto>
+        const all = res.map(mapBackendDiscoveryJob);
+        const page = params?.page || 0;
+        const size = params?.size || 10;
+        const start = page * size;
+        const paged = all.slice(start, start + size);
+        return {
+          content: paged.length > 0 || page === 0 ? paged : all,
+          totalElements: all.length,
+          totalPages: Math.max(1, Math.ceil(all.length / size)),
+          size,
+          number: page,
+          first: page === 0,
+          last: (page + 1) * size >= all.length,
+        };
+      }
+      return { content: [], totalElements: 0, totalPages: 0, size: params?.size || 10, number: params?.page || 0, first: true, last: true };
+    } catch (e) {
+      console.warn('Discovery cases fetch error:', e);
+      return { content: [], totalElements: 0, totalPages: 0, size: params?.size || 10, number: params?.page || 0, first: true, last: true };
+    }
+  },
+
   async getJobs(filters?: { status?: JobStatus; specialty?: string; search?: string }): Promise<Job[]> {
     try {
       const params = new URLSearchParams();
@@ -616,10 +768,15 @@ export const jobsApi = {
     const payload = {
       title: newJobData.title || 'Demanda Jurídica',
       description: newJobData.description || '',
+      processNumber: newJobData.processNumber || undefined,
       budget: newJobData.budgetMax || newJobData.budgetMin || 5000,
+      budgetMin: newJobData.budgetMin || 5000,
+      budgetMax: newJobData.budgetMax || 12000,
       jobType: newJobData.hiringType === 'HOURLY' ? 'Hourly' : 'Fixed',
       urgency: urgencyMap[newJobData.urgency || 'MEDIUM'] || 'Medium',
       confidentiality: confidentialityMap[newJobData.confidentiality || 'STANDARD'] || 'Public',
+      visibility: newJobData.visibility || 'DISCOVERY_SANITIZED',
+      sensitivity: newJobData.sensitivity || 'STANDARD',
       estimatedValue: newJobData.budgetMax || newJobData.budgetMin || 5000,
       deadline: newJobData.estimatedDeadlineDays
         ? new Date(Date.now() + (newJobData.estimatedDeadlineDays || 30) * 86400000)
@@ -627,6 +784,9 @@ export const jobsApi = {
             .split('T')[0]
         : undefined,
       clientName: currentUser.companyName || currentUser.name,
+      city: newJobData.city,
+      state: newJobData.state,
+      specialty: newJobData.specialty,
     };
 
     const created = await http<any>('/api/jobs/post', {
@@ -722,6 +882,94 @@ export const proposalsApi = {
   async rejectProposal(proposalId: string): Promise<Proposal> {
     const rejected = await http<any>(`/api/proposals/${proposalId}/reject`, { method: 'POST' });
     return mapBackendProposal(rejected);
+  },
+};
+
+// ─────────────────────────────────────────────
+// SECTION 6.5 – NEGOTIATIONS API (Pre-contractual)
+// ─────────────────────────────────────────────
+export const negotiationsApi = {
+  async getMessages(
+    proposalId: string | number,
+    page?: number,
+    size?: number
+  ): Promise<PaginatedResponse<NegotiationMessage> | NegotiationMessage[]> {
+    try {
+      const query = new URLSearchParams();
+      if (page !== undefined) query.append('page', String(page));
+      if (size !== undefined) query.append('size', String(size));
+      const qs = query.toString() ? `?${query.toString()}` : '';
+
+      const res = await http<any>(`/api/negotiations/${proposalId}/messages${qs}`);
+
+      const mapMsg = (m: any): NegotiationMessage => ({
+        id: String(m.id ?? m.messageId ?? ''),
+        threadId: String(m.threadId ?? m.negotiationThreadId ?? proposalId),
+        senderId: String(m.senderId ?? m.sender?.id ?? ''),
+        senderName: m.senderName || (m.sender ? `${m.sender.firstName || ''} ${m.sender.lastName || ''}`.trim() : 'Participante'),
+        senderRole: mapBackendRoles(m.senderRole ? [m.senderRole] : (m.sender?.roles || [])),
+        contentMasked: m.contentMasked || m.content || m.message || '',
+        sentAt: m.sentAt || m.createdAt || new Date().toISOString(),
+        isModerated: Boolean(m.isModerated ?? m.wasModerated ?? false),
+      });
+
+      if (res && Array.isArray(res.content)) {
+        return {
+          content: res.content.map(mapMsg),
+          totalElements: typeof res.totalElements === 'number' ? res.totalElements : res.content.length,
+          totalPages: typeof res.totalPages === 'number' ? res.totalPages : 1,
+          size: typeof res.size === 'number' ? res.size : (size || 10),
+          number: typeof res.number === 'number' ? res.number : (page || 0),
+          first: res.first ?? true,
+          last: res.last ?? true,
+        };
+      } else if (Array.isArray(res)) {
+        return res.map(mapMsg);
+      }
+      return [];
+    } catch (e) {
+      console.warn('Negotiation messages fetch error:', e);
+      return [];
+    }
+  },
+
+  async sendMessage(proposalId: string | number, content: string): Promise<NegotiationMessage> {
+    const res = await http<any>(`/api/negotiations/${proposalId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+
+    const currentUser = await authApi.getCurrentUser().catch(() => null);
+
+    return {
+      id: String(res?.id ?? res?.messageId ?? Date.now()),
+      threadId: String(res?.threadId ?? proposalId),
+      senderId: String(res?.senderId ?? currentUser?.id ?? ''),
+      senderName: res?.senderName || currentUser?.name || 'Você',
+      senderRole: currentUser?.role || 'LAWYER',
+      contentMasked: res?.contentMasked || res?.content || content,
+      sentAt: res?.sentAt || res?.createdAt || new Date().toISOString(),
+      isModerated: Boolean(res?.isModerated ?? false),
+    };
+  },
+
+  async getThread(proposalId: string | number): Promise<NegotiationThread | null> {
+    try {
+      const res = await http<any>(`/api/negotiations/thread/${proposalId}`);
+      if (!res) return null;
+      const messagesRes = await negotiationsApi.getMessages(proposalId);
+      const messagesList = Array.isArray(messagesRes) ? messagesRes : (messagesRes.content || []);
+      return {
+        id: String(res.id ?? proposalId),
+        proposalId: String(proposalId),
+        createdAt: res.createdAt || new Date().toISOString(),
+        closedAt: res.closedAt,
+        retentionDays: res.retentionDays || 90,
+        messages: messagesList,
+      };
+    } catch {
+      return null;
+    }
   },
 };
 

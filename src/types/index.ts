@@ -10,6 +10,59 @@ export type UrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export type ConfidentialityLevel = 'STANDARD' | 'CONFIDENTIAL' | 'STRICTLY_CONFIDENTIAL';
 
+export type VisibilityLevel = 'PRIVATE' | 'INVITE_ONLY' | 'DISCOVERY_SANITIZED';
+
+export type SensitivityLevel = 'STANDARD' | 'CONFIDENTIAL' | 'STRICTLY_CONFIDENTIAL';
+
+export type ModerationStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'FLAGGED';
+
+export interface JobDiscoveryDto {
+  id: string | number;
+  title: string;
+  specialty: string;
+  urgency: UrgencyLevel;
+  budgetMin: number;
+  budgetMax: number;
+  city: string;
+  state: string;
+  createdAt: string;
+  visibility: VisibilityLevel;
+  status: JobStatus;
+  moderationStatus?: ModerationStatus;
+  proposalsCount: number;
+  hiringType?: 'FIXED' | 'HOURLY' | 'Fixo' | 'Hora';
+}
+
+export interface PaginatedResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number; // page index (0-based)
+  first: boolean;
+  last: boolean;
+}
+
+export interface NegotiationMessage {
+  id: string;
+  threadId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: Role;
+  contentMasked: string;
+  sentAt: string;
+  isModerated: boolean;
+}
+
+export interface NegotiationThread {
+  id: string;
+  proposalId: string;
+  createdAt: string;
+  closedAt?: string;
+  retentionDays: number;
+  messages: NegotiationMessage[];
+}
+
 export type ProposalStatus = 'PENDING' | 'UNDER_REVIEW' | 'ACCEPTED' | 'REJECTED' | 'REVISED';
 
 export type ContractStatus = 'DRAFT' | 'ACTIVE' | 'PENDING_SIGNATURE' | 'COMPLETED' | 'DISPUTED' | 'TERMINATED';
@@ -286,6 +339,9 @@ export interface Job {
   status: JobStatus;
   urgency: UrgencyLevel;
   confidentiality: ConfidentialityLevel;
+  visibility?: VisibilityLevel;
+  sensitivity?: SensitivityLevel;
+  moderationStatus?: ModerationStatus;
   budgetMin: number;
   budgetMax: number;
   estimatedDeadlineDays: number;
@@ -319,6 +375,8 @@ export interface Proposal {
   deliveryDays: number;
   coverLetter: string;
   status: ProposalStatus;
+  proposalVersion?: number;
+  negotiationThreadId?: string;
   createdAt: string;
   proposedMilestones: {
     title: string;

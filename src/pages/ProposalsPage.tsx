@@ -285,6 +285,9 @@ export const ProposalsPage: React.FC = () => {
                         <span className="px-3 py-1 rounded-md text-xs font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {matchedJob?.specialty || 'Direito Jurídico'}
                         </span>
+                        <span className="px-2.5 py-1 rounded-md text-xs font-bold uppercase bg-purple-50 text-purple-700 border border-purple-200">
+                          v{prop.proposalVersion || 1}
+                        </span>
                         <span className="text-xs text-muted-foreground/90 font-mono">
                           Enviada em {new Date(prop.createdAt).toLocaleDateString('pt-BR')}
                         </span>
@@ -496,10 +499,13 @@ export const ProposalsPage: React.FC = () => {
                         className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/20 group-hover:scale-105 transition-transform"
                       />
                       <div>
-                        <h3 className="text-sm font-extrabold text-foreground group-hover:text-emerald-600 dark:text-emerald-400 transition-colors flex items-center gap-2">
+                        <h3 className="text-sm font-extrabold text-foreground group-hover:text-emerald-600 dark:text-emerald-400 transition-colors flex items-center gap-2 flex-wrap">
                           {prop.lawyerName}
                           <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-mono font-bold border border-emerald-200">
                             {prop.lawyerOab}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[11px] font-bold border border-purple-200">
+                            v{prop.proposalVersion || 1}
                           </span>
                         </h3>
                         <p className="text-xs font-semibold text-muted-foreground/90 mt-0.5 flex items-center gap-1">

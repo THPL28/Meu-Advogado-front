@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileCheck2, DollarSign, Calendar, Clock, Plus, Trash2, Lock, AlertCircle, ShieldCheck, ShieldAlert } from 'lucide-react';
+import {
+  X,
+  FileCheck2,
+  DollarSign,
+  Calendar,
+  Clock,
+  Plus,
+  Trash2,
+  Lock,
+  AlertCircle,
+  ShieldCheck,
+  ShieldAlert,
+  MessageSquare,
+  ChevronRight
+} from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { proposalsApi } from '../../services/api';
 
@@ -13,12 +27,13 @@ export const NewProposalModal: React.FC = () => {
     user,
     role,
     verificationStatus,
-    isVerifiedLawyer,
+    openNegotiationChat,
+    navigateToCaseDetail,
     setActiveTab,
     refreshData
   } = useLegalPlatform();
 
-  const selectedJob = jobs.find(j => j.id === selectedCaseId) || jobs[0];
+  const selectedJob = jobs.find(j => String(j.id) === String(selectedCaseId)) || jobs[0];
 
   // Modality logic from job requirement
   const isHourlyJob = selectedJob?.hiringType === 'HOURLY' || selectedJob?.hiringType === 'Hora';
@@ -45,10 +60,12 @@ export const NewProposalModal: React.FC = () => {
 
   const isUnverifiedLawyer = role === 'LAWYER' && verificationStatus !== 'VERIFIED';
 
-  // Check if lawyer has already sent a proposal for this job
-  const hasAlreadySubmitted = user && selectedJob && proposals.some(
-    p => p.jobId === selectedJob.id && (p.lawyerId === user.id || p.lawyerOab === user.oabNumber)
-  );
+  // Check if lawyer has already sent an active proposal for this job (duplicate proposal prevention)
+  const existingProposal = user && selectedJob ? proposals.find(
+    p => String(p.jobId) === String(selectedJob.id) && (p.lawyerId === user.id || p.lawyerOab === user.oabNumber) && p.status !== 'REJECTED'
+  ) : null;
+
+  const hasAlreadySubmitted = Boolean(existingProposal);
 
   useEffect(() => {
     if (selectedJob?.budgetMin && !isHourlyJob) {
@@ -75,8 +92,6 @@ export const NewProposalModal: React.FC = () => {
     setMilestones(updated);
   };
 
-  const totalMilestonesValue = milestones.reduce((sum, m) => sum + Number(m.value || 0), 0);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isUnverifiedLawyer || hasAlreadySubmitted) return;
@@ -100,7 +115,17 @@ export const NewProposalModal: React.FC = () => {
       setIsNewProposalModalOpen(false);
     } catch (err: any) {
       console.error('Failed to submit proposal:', err);
-      setErrorMessage(err.message || 'Erro ao enviar proposta. Verifique os dados e tente novamente.');
+      if (err?.status === 409 || err?.isConflict) {
+        setErrorMessage(
+          err.message || 'Você já possui uma proposta ativa para esta demanda (HTTP 409). Acesse "Propostas Enviadas" para negociar com o cliente ou ajustar seus valores.'
+        );
+      } else if (err?.status === 422 || err?.isUnprocessable) {
+        setErrorMessage(
+          err.message || 'Violação de Moderação: O texto da proposta contém contatos diretos proibidos (telefone, e-mail, redes sociais ou dados bancários fora do Escrow).'
+        );
+      } else {
+        setErrorMessage(err.message || 'Erro ao enviar proposta. Verifique os dados e tente novamente.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -173,19 +198,53 @@ export const NewProposalModal: React.FC = () => {
               </button>
             </div>
           </div>
-        ) : hasAlreadySubmitted ? (
-          <div className="mt-6 p-6 bg-amber-50 border border-amber-200 rounded-2xl space-y-3 text-center">
-            <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
-            <h4 className="text-sm font-extrabold text-amber-600 dark:text-amber-400">Você já enviou uma proposta para esta demanda</h4>
-            <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed max-w-md mx-auto">
-              Cada advogado pode enviar apenas uma proposta por projeto. Acompanhe o status e converse com o cliente através da página "Propostas Enviadas".
-            </p>
-            <button
-              onClick={() => setIsNewProposalModalOpen(false)}
-              className="px-5 py-2.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-xl cursor-pointer"
-            >
-              Fechar
-            </button>
+        ) : hasAlreadySubmitted && existingProposal ? (
+          <div className="mt-6 p-6 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-base font-extrabold text-foreground">
+                Você já possui uma proposta ativa para esta demanda (v{existingProposal.proposalVersion || 1})
+              </h4>
+              <p className="text-xs text-muted-foreground leading-relaxed max-w-md mx-auto">
+                Conforme as regras de governança e concorrência leal da Fase 2, cada advogado pode manter apenas uma proposta ativa por demanda (HTTP 409 Conflict). Para negociar ou rever seus termos, utilize o chat de negociação pré-contratual.
+              </p>
+            </div>
+
+            <div className="p-3 bg-card rounded-xl border border-border text-xs flex items-center justify-between max-w-md mx-auto">
+              <span className="font-semibold text-muted-foreground">Valor Atual Proposto:</span>
+              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                R$ {existingProposal.value.toLocaleString('pt-BR')} ({existingProposal.deliveryDays} dias)
+              </span>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => setIsNewProposalModalOpen(false)}
+                className="w-full sm:w-auto px-4 py-2.5 bg-muted text-muted-foreground text-xs font-bold rounded-xl cursor-pointer hover:bg-muted/80"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  setIsNewProposalModalOpen(false);
+                  openNegotiationChat(existingProposal.id);
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+              >
+                <MessageSquare className="w-4 h-4" /> Abrir Chat de Negociação
+              </button>
+              <button
+                onClick={() => {
+                  setIsNewProposalModalOpen(false);
+                  navigateToCaseDetail(selectedJob.id);
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-background hover:bg-muted text-foreground border border-border text-xs font-bold rounded-xl cursor-pointer transition-all"
+              >
+                Ver Demanda Completa
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -208,8 +267,12 @@ export const NewProposalModal: React.FC = () => {
             </div>
 
             {errorMessage && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-700">
-                {errorMessage}
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Aviso do Envio:</span>
+                  <span>{errorMessage}</span>
+                </div>
               </div>
             )}
             
