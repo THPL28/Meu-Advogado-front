@@ -46,6 +46,17 @@ import {
   NegotiationThread,
   UrgencyLevel,
   ConfidentialityLevel,
+  ConflictStatus,
+  ConflictCheck,
+  ContractSignature,
+  DocumentClassification,
+  VirusScanStatus,
+  SecureDocument,
+  DocumentAccessLog,
+  ContractTimelineEventType,
+  ContractTimelineEvent,
+  ContractTimelineDto,
+  AcceptContractRequestDto,
 } from '../../types';
 
 // ─────────────────────────────────────────────
@@ -119,12 +130,13 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_CONFIG.baseURL}${path}`;
   const token = FEATURE_FLAGS.auth.cookie_session_enabled ? null : getStoredToken();
   const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
   const res = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       'Accept': 'application/json',
       ...authHeaders,
       ...(options.headers || {}),
@@ -159,7 +171,7 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
           ...options,
           credentials: 'include',
           headers: {
-            'Content-Type': 'application/json',
+            ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
             'Accept': 'application/json',
             ...retryHeaders,
             ...(options.headers || {}),
@@ -441,9 +453,110 @@ function mapBackendProposal(raw: Record<string, unknown>): Proposal {
   };
 }
 
+export function mapBackendContractSignature(raw: Record<string, unknown>): ContractSignature {
+  return {
+    id: String(raw.id ?? ''),
+    contractId: String(raw.contractId ?? (raw.contract as any)?.contractId ?? ''),
+    userId: String(raw.userId ?? (raw.user as any)?.id ?? ''),
+    userName: (raw.userName as string) || ((raw.user as any) ? `${(raw.user as any).firstName || ''} ${(raw.user as any).lastName || ''}`.trim() : undefined),
+    signatureType: (raw.signatureType as string) || (raw.signature_type as string) || 'CLIENT_ACCEPTANCE',
+    termsVersion: (raw.termsVersion as string) || (raw.terms_version as string) || 'v1.0',
+    ipAddress: (raw.ipAddress as string) || (raw.ip_address as string) || undefined,
+    userAgent: (raw.userAgent as string) || (raw.user_agent as string) || undefined,
+    hashReceipt: (raw.hashReceipt as string) || (raw.hash_receipt as string) || '',
+    signedAt: (raw.signedAt as string) || (raw.signed_at as string) || new Date().toISOString(),
+  };
+}
+
+export function mapBackendSecureDocument(raw: Record<string, unknown>): SecureDocument {
+  const classificationRaw = String(raw.classification || 'CONFIDENTIAL').toUpperCase();
+  const classification: DocumentClassification = (
+    classificationRaw === 'PUBLIC' || classificationRaw === 'RESTRICTED' ? classificationRaw : 'CONFIDENTIAL'
+  ) as DocumentClassification;
+
+  const virusRaw = String(raw.virusScanStatus || raw.virus_scan_status || 'CLEAN').toUpperCase();
+  const virusScanStatus: VirusScanStatus = (
+    virusRaw === 'PENDING' || virusRaw === 'INFECTED' ? virusRaw : 'CLEAN'
+  ) as VirusScanStatus;
+
+  return {
+    id: String(raw.id ?? raw.documentId ?? ''),
+    contractId: raw.contractId ? String(raw.contractId) : (raw.contract as any)?.contractId ? String((raw.contract as any).contractId) : undefined,
+    jobId: raw.jobId ? String(raw.jobId) : (raw.job as any)?.jobId ? String((raw.job as any).jobId) : undefined,
+    ownerId: String(raw.ownerId ?? (raw.owner as any)?.id ?? ''),
+    ownerName: (raw.ownerName as string) || ((raw.owner as any) ? `${(raw.owner as any).firstName || ''} ${(raw.owner as any).lastName || ''}`.trim() : undefined),
+    fileName: (raw.fileName as string) || (raw.file_name as string) || 'documento.pdf',
+    fileSize: Number(raw.fileSize ?? raw.file_size ?? 0),
+    contentType: (raw.contentType as string) || (raw.content_type as string) || 'application/pdf',
+    storagePath: (raw.storagePath as string) || (raw.storage_path as string) || undefined,
+    sha256Hash: (raw.sha256Hash as string) || (raw.sha256_hash as string) || '',
+    classification,
+    virusScanStatus,
+    version: Number(raw.version ?? 1),
+    createdAt: (raw.createdAt as string) || (raw.created_at as string) || new Date().toISOString(),
+    expiresAt: (raw.expiresAt as string) || (raw.expires_at as string) || undefined,
+  };
+}
+
+export function mapBackendDocumentAccessLog(raw: Record<string, unknown>): DocumentAccessLog {
+  return {
+    id: String(raw.id ?? ''),
+    documentId: String(raw.documentId ?? (raw.document as any)?.id ?? ''),
+    userId: raw.userId ? String(raw.userId) : (raw.user as any)?.id ? String((raw.user as any).id) : undefined,
+    userName: (raw.userName as string) || ((raw.user as any) ? `${(raw.user as any).firstName || ''} ${(raw.user as any).lastName || ''}`.trim() : undefined),
+    action: (raw.action as string) || 'VIEW_METADATA',
+    timestamp: (raw.timestamp as string) || new Date().toISOString(),
+    ipAddress: (raw.ipAddress as string) || (raw.ip_address as string) || undefined,
+    userAgent: (raw.userAgent as string) || (raw.user_agent as string) || undefined,
+  };
+}
+
+export function mapBackendConflictCheck(raw: Record<string, unknown>): ConflictCheck {
+  const statusRaw = String(raw.status || 'NOT_STARTED').toUpperCase();
+  const status: ConflictStatus = (
+    ['NOT_STARTED', 'IN_REVIEW', 'CLEAR', 'CONSENT_REQUIRED', 'CONSENTED', 'BLOCKED'].includes(statusRaw)
+      ? statusRaw
+      : 'NOT_STARTED'
+  ) as ConflictStatus;
+
+  return {
+    id: String(raw.id ?? ''),
+    jobId: String(raw.jobId ?? (raw.job as any)?.jobId ?? ''),
+    lawyerId: String(raw.lawyerId ?? (raw.lawyer as any)?.id ?? ''),
+    lawyerName: (raw.lawyerName as string) || ((raw.lawyer as any) ? `${(raw.lawyer as any).firstName || ''} ${(raw.lawyer as any).lastName || ''}`.trim() : undefined),
+    status,
+    reasonMasked: (raw.reasonMasked as string) || (raw.reason_masked as string) || undefined,
+    createdAt: (raw.createdAt as string) || (raw.created_at as string) || new Date().toISOString(),
+    resolvedAt: (raw.resolvedAt as string) || (raw.resolved_at as string) || undefined,
+  };
+}
+
+export function mapBackendTimelineEvent(raw: Record<string, unknown>): ContractTimelineEvent {
+  return {
+    id: String(raw.id ?? Date.now()),
+    contractId: raw.contractId ? String(raw.contractId) : undefined,
+    eventType: (raw.eventType as ContractTimelineEventType) || (raw.type as ContractTimelineEventType) || 'CONTRACT_SIGNED',
+    title: (raw.title as string) || 'Evento Contratual',
+    description: (raw.description as string) || '',
+    timestamp: (raw.timestamp as string) || (raw.date as string) || new Date().toISOString(),
+    actorName: (raw.actorName as string) || (raw.author as string) || undefined,
+    actorRole: (raw.actorRole as string) || undefined,
+    status: (raw.status as string) || undefined,
+    hashReceipt: (raw.hashReceipt as string) || ((raw.metadata as any)?.hashReceipt as string) || undefined,
+    termsVersion: (raw.termsVersion as string) || ((raw.metadata as any)?.termsVersion as string) || undefined,
+    documentId: raw.documentId ? String(raw.documentId) : undefined,
+    milestoneId: raw.milestoneId ? String(raw.milestoneId) : undefined,
+    metadata: (raw.metadata as Record<string, any>) || undefined,
+  };
+}
+
 function mapBackendContract(raw: Record<string, unknown>): Contract {
   const totalVal = Number(raw.totalValue || 0);
   const rawMilestones = (raw.milestones as any[]) || [];
+  const rawSignatures = (raw.signatures as any[]) || [];
+  const rawDocuments = (raw.documents as any[]) || [];
+  const rawTimeline = (raw.timelineEvents as any[]) || (raw.timeline as any[]) || [];
+
   return {
     id: String(raw.contractId ?? raw.id ?? ''),
     jobId: String(raw.jobId ?? (raw.job as any)?.jobId ?? ''),
@@ -454,14 +567,22 @@ function mapBackendContract(raw: Record<string, unknown>): Contract {
     clientName: (raw.clientName as string) || ((raw.client as any) ? `${(raw.client as any).firstName || ''} ${(raw.client as any).lastName || ''}`.trim() : 'Cliente'),
     lawyerId: String(raw.lawyerId ?? (raw.lawyer as any)?.id ?? ''),
     lawyerName: (raw.lawyerName as string) || ((raw.lawyer as any) ? `${(raw.lawyer as any).firstName || ''} ${(raw.lawyer as any).lastName || ''}`.trim() : 'Advogado'),
+    lawyerPhotoUrl: (raw.lawyerPhotoUrl as string) || (raw.lawyer as any)?.photoUrl || (raw.lawyer as any)?.avatarUrl || undefined,
     lawyerOab: (raw.lawyerOab as string) || 'OAB Registrada',
     totalValue: totalVal,
-    escrowBalance: totalVal,
-    releasedBalance: 0,
+    escrowBalance: Number(raw.escrowBalance ?? totalVal),
+    releasedBalance: Number(raw.releasedBalance ?? 0),
     status: ((raw.status as string)?.toUpperCase() as ContractStatus) || 'ACTIVE',
     startDate: (raw.startDate as string) || new Date().toISOString().split('T')[0],
     endDateEst: (raw.endDate as string) || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-    progressPercentage: 0,
+    progressPercentage: Number(raw.progressPercentage ?? 0),
+    conflictStatus: (raw.conflictStatus as string) || (raw.conflict_status as string) || 'CLEAR',
+    termsVersion: (raw.termsVersion as string) || (raw.terms_version as string) || 'v1.0',
+    signedAt: (raw.signedAt as string) || (raw.signed_at as string) || undefined,
+    hashReceipt: (raw.hashReceipt as string) || (raw.hash_receipt as string) || undefined,
+    signatures: rawSignatures.map(mapBackendContractSignature),
+    documents: rawDocuments.map(mapBackendSecureDocument),
+    timelineEvents: rawTimeline.map(mapBackendTimelineEvent),
     milestones: rawMilestones.length > 0
       ? rawMilestones.map((m, i) => ({
           id: String(m.milestoneId ?? m.id ?? i),
@@ -869,13 +990,11 @@ export const proposalsApi = {
     }
   },
 
-  async acceptProposal(proposalId: string): Promise<{ proposal: Proposal; contract: Contract }> {
-    await http(`/api/proposals/${proposalId}/accept`, { method: 'POST' });
-    const contractData = await http<any>(`/api/contracts/create/${proposalId}`, { method: 'POST' }).catch(() => null);
-    const updatedProposal = await http<any>(`/api/proposals/${proposalId}`).catch(() => null);
+  async acceptProposal(proposalId: string | number, termsVersion: string = 'v1.0', notes?: string): Promise<{ proposal: Proposal; contract: Contract }> {
+    const contract = await contractsApi.acceptAndContract(proposalId, termsVersion, notes);
     return {
-      proposal: updatedProposal ? mapBackendProposal(updatedProposal) : ({ id: proposalId, status: 'ACCEPTED' } as any),
-      contract: contractData ? mapBackendContract(contractData) : ({ id: 'cnt_' + proposalId, status: 'ACTIVE' } as any),
+      proposal: { id: String(proposalId), status: 'ACCEPTED' } as any,
+      contract,
     };
   },
 
@@ -987,7 +1106,7 @@ export const contractsApi = {
     }
   },
 
-  async getContractById(contractId: string): Promise<Contract | null> {
+  async getContractById(contractId: string | number): Promise<Contract | null> {
     try {
       const raw = await http<any>(`/api/contracts/${contractId}`);
       return raw ? mapBackendContract(raw) : null;
@@ -996,7 +1115,47 @@ export const contractsApi = {
     }
   },
 
-  async updateMilestoneStatus(contractId: string, milestoneId: string, status: MilestoneStatus): Promise<Contract | null> {
+  async acceptAndContract(proposalId: number | string, termsVersion: string = 'v1.0', notes?: string): Promise<Contract> {
+    const raw = await http<any>('/api/contracts/accept-and-contract', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposalId: Number(proposalId),
+        termsVersion,
+        notes: notes || undefined,
+      }),
+    });
+    return mapBackendContract(raw);
+  },
+
+  async getTimeline(contractId: number | string): Promise<ContractTimelineDto> {
+    try {
+      const raw = await http<any>(`/api/contracts/${contractId}/timeline`);
+      const events = Array.isArray(raw?.events) ? raw.events.map(mapBackendTimelineEvent) : (Array.isArray(raw) ? raw.map(mapBackendTimelineEvent) : []);
+      return {
+        contractId: String(raw?.contractId ?? contractId),
+        contractTitle: (raw?.contractTitle as string) || 'Mandato Jurídico',
+        events,
+      };
+    } catch (e) {
+      console.warn('Timeline fetch error:', e);
+      return {
+        contractId: String(contractId),
+        contractTitle: 'Mandato Jurídico',
+        events: [],
+      };
+    }
+  },
+
+  async getSignatures(contractId: number | string): Promise<ContractSignature[]> {
+    try {
+      const contract = await contractsApi.getContractById(contractId);
+      return contract?.signatures || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async updateMilestoneStatus(contractId: string | number, milestoneId: string | number, status: MilestoneStatus): Promise<Contract | null> {
     if (status === 'SUBMITTED' || status === 'APPROVED') {
       try {
         await http(`/api/contracts/milestones/${milestoneId}/complete`, { method: 'POST' });
@@ -1008,7 +1167,7 @@ export const contractsApi = {
     return await contractsApi.getContractById(contractId);
   },
 
-  async releaseMilestone(contractId: string, milestoneId: string): Promise<Contract | null> {
+  async releaseMilestone(contractId: string | number, milestoneId: string | number): Promise<Contract | null> {
     try {
       const payment = await http<any>(`/api/payments/create/${milestoneId}`, { method: 'POST' });
       const pId = payment?.paymentId || milestoneId;
@@ -1020,7 +1179,7 @@ export const contractsApi = {
     return await contractsApi.getContractById(contractId);
   },
 
-  async finishContract(contractId: string): Promise<Contract | null> {
+  async finishContract(contractId: string | number): Promise<Contract | null> {
     try {
       await http(`/api/contracts/${contractId}/complete`, { method: 'POST' });
       return await contractsApi.getContractById(contractId);
@@ -1028,6 +1187,44 @@ export const contractsApi = {
       console.warn('Finish contract error:', e);
     }
     return await contractsApi.getContractById(contractId);
+  },
+};
+
+// ─────────────────────────────────────────────
+// SECTION 7.5 – CONFLICTS API (Conflict of Interest Checks & Declarations)
+// ─────────────────────────────────────────────
+export const conflictsApi = {
+  async checkConflict(jobId: number | string, lawyerId?: number | string): Promise<ConflictCheck> {
+    const raw = await http<any>('/api/conflicts/check', {
+      method: 'POST',
+      body: JSON.stringify({
+        jobId: Number(jobId),
+        lawyerId: lawyerId ? Number(lawyerId) : undefined,
+      }),
+    });
+    return mapBackendConflictCheck(raw);
+  },
+
+  async declareConflict(jobId: number | string, status: ConflictStatus, reason?: string): Promise<ConflictCheck> {
+    const raw = await http<any>('/api/conflicts/declare', {
+      method: 'POST',
+      body: JSON.stringify({
+        jobId: Number(jobId),
+        status,
+        reason,
+      }),
+    });
+    return mapBackendConflictCheck(raw);
+  },
+
+  async getConflictStatus(jobId: number | string, lawyerId?: number | string): Promise<ConflictCheck | null> {
+    try {
+      const query = lawyerId ? `?lawyerId=${lawyerId}` : '';
+      const raw = await http<any>(`/api/conflicts/job/${jobId}${query}`);
+      return raw ? mapBackendConflictCheck(raw) : null;
+    } catch {
+      return null;
+    }
   },
 };
 
@@ -1379,9 +1576,117 @@ export const lawyersApi = {
 };
 
 // ─────────────────────────────────────────────
-// SECTION 13 – DOCUMENTS API
+// SECTION 13 – DOCUMENTS API (Secure Document Vault & Legacy)
 // ─────────────────────────────────────────────
 export const documentsApi = {
+  async uploadSecureDocument(
+    file: File,
+    params: {
+      contractId?: string | number;
+      jobId?: string | number;
+      classification?: DocumentClassification;
+    } = {}
+  ): Promise<SecureDocument> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (params.contractId !== undefined && params.contractId !== null && params.contractId !== '') {
+      formData.append('contractId', String(params.contractId));
+    }
+    if (params.jobId !== undefined && params.jobId !== null && params.jobId !== '') {
+      formData.append('jobId', String(params.jobId));
+    }
+    if (params.classification) {
+      formData.append('classification', params.classification);
+    }
+
+    const raw = await http<any>('/api/documents/secure/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    return mapBackendSecureDocument(raw);
+  },
+
+  async downloadSecureDocument(
+    documentId: string | number,
+    fallbackFileName?: string
+  ): Promise<{ blob: Blob; fileName: string; sha256: string }> {
+    const token = FEATURE_FLAGS.auth.cookie_session_enabled ? null : getStoredToken();
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${API_CONFIG.baseURL}/api/documents/secure/${documentId}/download`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        ...authHeaders,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Falha ao baixar documento seguro (Status ${res.status})`);
+    }
+
+    const sha256 = res.headers.get('X-Document-SHA256') || '';
+    let fileName = fallbackFileName || 'documento_seguro';
+    const disposition = res.headers.get('Content-Disposition');
+    if (disposition && disposition.includes('filename=')) {
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (match && match[1]) {
+        fileName = match[1].replace(/['"]/g, '').trim();
+      }
+    }
+
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+
+    return { blob, fileName, sha256 };
+  },
+
+  async getContractDocuments(contractId: string | number): Promise<SecureDocument[]> {
+    try {
+      const data = await http<any[]>(`/api/documents/secure/contract/${contractId}`);
+      return (Array.isArray(data) ? data : []).map(mapBackendSecureDocument);
+    } catch (e) {
+      console.warn('Contract documents fetch error:', e);
+      return [];
+    }
+  },
+
+  async getJobDocuments(jobId: string | number): Promise<SecureDocument[]> {
+    try {
+      const data = await http<any[]>(`/api/documents/secure/job/${jobId}`);
+      return (Array.isArray(data) ? data : []).map(mapBackendSecureDocument);
+    } catch (e) {
+      console.warn('Job documents fetch error:', e);
+      return [];
+    }
+  },
+
+  async deleteSecureDocument(documentId: string | number): Promise<boolean> {
+    try {
+      await http(`/api/documents/secure/${documentId}`, { method: 'DELETE' });
+      return true;
+    } catch (e) {
+      console.error('Delete secure document error:', e);
+      return false;
+    }
+  },
+
+  async getDocumentLogs(documentId: string | number): Promise<DocumentAccessLog[]> {
+    try {
+      const data = await http<any[]>(`/api/documents/secure/${documentId}/logs`);
+      return (Array.isArray(data) ? data : []).map(mapBackendDocumentAccessLog);
+    } catch (e) {
+      console.warn('Document logs fetch error:', e);
+      return [];
+    }
+  },
+
   async getDocuments(_category?: string): Promise<AppDocument[]> {
     return [];
   },

@@ -21,10 +21,17 @@ import {
   ArrowLeft,
   Building2,
   Heart,
-  EyeOff
+  EyeOff,
+  Hash,
+  Copy,
+  Check,
+  Loader2,
+  Shield
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
-import { proposalsApi, contractsApi } from '../services/api';
+import { proposalsApi, contractsApi, documentsApi } from '../services/api';
+import { AcceptProposalModal } from '../components/proposals/AcceptProposalModal';
+import { Proposal, SecureDocument, ContractTimelineEvent } from '../types';
 
 const ExpandableText = ({ text, maxLength = 250 }: { text: string; maxLength?: number }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -161,6 +168,37 @@ export const CaseDetailPage: React.FC = () => {
 
   const myProposal = user ? caseProposals.find(p => p.lawyerId === user.id) : null;
 
+  // Phase 3 state
+  const [acceptingProposal, setAcceptingProposal] = useState<Proposal | null>(null);
+  const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
+  const [secureDocs, setSecureDocs] = useState<SecureDocument[]>([]);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [copiedDocHashId, setCopiedDocHashId] = useState<string | null>(null);
+  const [timelineEvents, setTimelineEvents] = useState<ContractTimelineEvent[]>([]);
+
+  useEffect(() => {
+    if (job?.id) {
+      documentsApi.getJobDocuments(job.id).then((docs) => {
+        if (docs && docs.length > 0) setSecureDocs(docs);
+      }).catch(() => {});
+    }
+    if (caseContract?.id) {
+      contractsApi.getTimeline(caseContract.id).then((tl) => {
+        if (tl?.events && tl.events.length > 0) setTimelineEvents(tl.events);
+      }).catch(() => {});
+      documentsApi.getContractDocuments(caseContract.id).then((docs) => {
+        if (docs && docs.length > 0) {
+          setSecureDocs((prev) => {
+            const map = new Map<string, SecureDocument>();
+            prev.forEach((d) => map.set(String(d.id), d));
+            docs.forEach((d) => map.set(String(d.id), d));
+            return Array.from(map.values());
+          });
+        }
+      }).catch(() => {});
+    }
+  }, [job?.id, caseContract?.id]);
+
   // Participant authorization check (LGPD & Privacy Rules)
   const isClientOwner = role === 'CLIENT' && (String(job.clientId) === String(user?.id) || !job.clientId);
   const isAssignedLawyer = role === 'LAWYER' && user && String(job.assignedLawyerId) === String(user.id);
@@ -171,13 +209,29 @@ export const CaseDetailPage: React.FC = () => {
   const isContractedOrAssumed = !!caseContract || job.status !== 'OPEN';
   const isMyAssumedJob = isClientOwner || isAssignedLawyer;
 
-  const handleAcceptProposal = async (proposalId: string) => {
-    try {
-      await proposalsApi.acceptProposal(proposalId);
-      await refreshData();
-    } catch (err) {
-      console.error('Erro ao aceitar proposta:', err);
+  const handleAcceptProposal = (proposalId: string) => {
+    const propToAccept = proposals.find((p) => String(p.id) === String(proposalId)) || caseProposals.find((p) => String(p.id) === String(proposalId));
+    if (propToAccept) {
+      setAcceptingProposal(propToAccept);
+      setIsAcceptModalOpen(true);
     }
+  };
+
+  const handleDownloadSecureDoc = async (docId: string | number, fileName: string) => {
+    setDownloadingDocId(String(docId));
+    try {
+      await documentsApi.downloadSecureDocument(docId, fileName);
+    } catch (e) {
+      console.error('Download doc error:', e);
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
+
+  const handleCopyDocHash = (docId: string | number, hash: string) => {
+    navigator.clipboard.writeText(hash);
+    setCopiedDocHashId(String(docId));
+    setTimeout(() => setCopiedDocHashId(null), 3000);
   };
 
   const handleWithdrawProposal = async (proposalId: string) => {
@@ -814,39 +868,111 @@ export const CaseDetailPage: React.FC = () => {
           )}
 
           {activeTab === 'DOCUMENTS' && (
-            <div className="p-6 sm:p-8 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
+            <div className="p-6 sm:p-8 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-5 shadow-xs">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">Peças & Anexos Vinculados</h3>
+                <div>
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                    Cofre Seguro de Documentos (ADR-011)
+                  </span>
+                  <h3 className="text-sm font-bold text-foreground mt-0.5">Peças & Documentos com Assinatura SHA-256</h3>
+                </div>
                 {isAuthorized && isMyAssumedJob && (
                   <button
                     onClick={() => setIsUploadDocModalOpen(true)}
-                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1.5 cursor-pointer bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-200/60"
                   >
-                    <PlusCircle className="w-4 h-4" /> Adicionar Documento
+                    <PlusCircle className="w-4 h-4" /> Anexar ao Cofre
                   </button>
                 )}
               </div>
 
               {isAuthorized ? (
-                <div className="divide-y divide-border/50">
-                  {caseDocs.map((doc) => (
-                    <div key={doc.id} className="py-3.5 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-muted text-emerald-600 dark:text-emerald-400">
-                          <FileText className="w-5 h-5" />
+                <div className="space-y-3">
+                  {secureDocs.length > 0 ? (
+                    secureDocs.map((doc) => (
+                      <div key={doc.id} className="p-4 bg-background border border-border/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-emerald-500/40 transition-colors">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="p-2.5 rounded-xl bg-muted text-emerald-600 dark:text-emerald-400 shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-xs font-bold text-foreground truncate">{doc.fileName}</p>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                doc.classification === 'CONFIDENTIAL' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                doc.classification === 'RESTRICTED' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                                'bg-blue-50 text-blue-700 border border-blue-200'
+                              }`}>
+                                {doc.classification}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                <ShieldCheck className="w-3 h-3 text-emerald-600" /> {doc.virusScanStatus}
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] text-muted-foreground">
+                              {(doc.fileSize / 1024).toFixed(1)} KB • {new Date(doc.createdAt).toLocaleDateString('pt-BR')} • {doc.ownerName ? `Enviado por ${doc.ownerName}` : 'Autenticado'}
+                            </p>
+
+                            {/* SHA-256 Fingerprint */}
+                            {doc.sha256Hash && (
+                              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground pt-0.5">
+                                <Hash className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span className="truncate max-w-xs">{doc.sha256Hash}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyDocHash(doc.id, doc.sha256Hash)}
+                                  className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                  title="Copiar Hash SHA-256"
+                                >
+                                  {copiedDocHashId === String(doc.id) ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-foreground">{doc.title}</p>
-                          <p className="text-xs text-muted-foreground/90">{doc.fileName} • {doc.fileSize} • {doc.uploadDate}</p>
+
+                        <div className="shrink-0 flex items-center gap-2 self-end sm:self-center">
+                          <button
+                            onClick={() => handleDownloadSecureDoc(doc.id, doc.fileName)}
+                            disabled={downloadingDocId === String(doc.id)}
+                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            {downloadingDocId === String(doc.id) ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Baixando...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-3.5 h-3.5" /> Download Seguro
+                              </>
+                            )}
+                          </button>
                         </div>
                       </div>
-                      <button className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer">
-                        <Download className="w-4 h-4" />
-                      </button>
+                    ))
+                  ) : caseDocs.length > 0 ? (
+                    caseDocs.map((doc) => (
+                      <div key={doc.id} className="py-3.5 flex items-center justify-between gap-3 border-b border-border/50">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-muted text-emerald-600 dark:text-emerald-400">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-foreground">{doc.title}</p>
+                            <p className="text-xs text-muted-foreground">{doc.fileName} • {doc.fileSize} • {doc.uploadDate}</p>
+                          </div>
+                        </div>
+                        <button className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer">
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center bg-background/50 rounded-2xl border border-dashed border-border space-y-2">
+                      <Lock className="w-8 h-8 text-muted-foreground mx-auto" />
+                      <p className="text-xs font-semibold text-muted-foreground">Nenhum documento anexado ao cofre seguro deste processo.</p>
                     </div>
-                  ))}
-                  {caseDocs.length === 0 && (
-                    <p className="text-xs text-muted-foreground py-6 text-center">Nenhum documento anexado a este processo.</p>
                   )}
                 </div>
               ) : (
@@ -873,18 +999,49 @@ export const CaseDetailPage: React.FC = () => {
 
           {activeTab === 'TIMELINE' && (
             <div className="p-6 sm:p-8 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-6 shadow-xs">
-              <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">Linha do Tempo e Andamentos</h3>
+              <div>
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                  Trilha Forense Imutável (ADR-012)
+                </span>
+                <h3 className="text-sm font-bold text-foreground mt-0.5">Linha do Tempo & Andamentos do Mandato</h3>
+              </div>
+
               <div className="space-y-6 pl-4 border-l-2 border-emerald-500/30">
-                {job.timeline?.map((event) => (
-                  <div key={event.id} className="relative space-y-1">
-                    <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-600 ring-4 ring-white" />
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-foreground">{event.title}</span>
-                      <span className="text-xs text-muted-foreground/90 font-mono">{event.date}</span>
+                {timelineEvents.length > 0 ? (
+                  timelineEvents.map((event) => (
+                    <div key={event.id} className="relative space-y-1">
+                      <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-600 ring-4 ring-white" />
+                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                        <span className="font-bold text-foreground">{event.title}</span>
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {new Date(event.timestamp).toLocaleString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{event.description}</p>
+                      {event.actorName && (
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                          Por: {event.actorName} {event.actorRole ? `(${event.actorRole})` : ''}
+                        </p>
+                      )}
+                      {event.hashReceipt && (
+                        <p className="text-[10px] font-mono text-muted-foreground bg-muted/50 p-1.5 rounded-lg border border-border/40 truncate">
+                          Hash Receipt: {event.hashReceipt}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground/90 leading-relaxed">{event.description}</p>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  job.timeline?.map((event) => (
+                    <div key={event.id} className="relative space-y-1">
+                      <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-600 ring-4 ring-white" />
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-foreground">{event.title}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{event.date}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{event.description}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -1008,6 +1165,20 @@ export const CaseDetailPage: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Accept Proposal Modal with Conflict Check, Terms v1.0 & SHA-256 Receipt */}
+      <AcceptProposalModal
+        isOpen={isAcceptModalOpen}
+        proposal={acceptingProposal}
+        job={job}
+        onSuccess={async () => {
+          await refreshData();
+        }}
+        onClose={() => {
+          setIsAcceptModalOpen(false);
+          setAcceptingProposal(null);
+        }}
+      />
 
     </div>
   );

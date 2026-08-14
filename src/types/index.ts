@@ -397,6 +397,113 @@ export interface Milestone {
   approvedAt?: string;
 }
 
+export type ConflictStatus = 'NOT_STARTED' | 'IN_REVIEW' | 'CLEAR' | 'CONSENT_REQUIRED' | 'CONSENTED' | 'BLOCKED';
+
+export interface ConflictCheck {
+  id: string | number;
+  jobId: string | number;
+  lawyerId: string | number;
+  lawyerName?: string;
+  status: ConflictStatus;
+  reasonMasked?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface ContractSignature {
+  id: string | number;
+  contractId: string | number;
+  userId: string | number;
+  userName?: string;
+  signatureType: string;
+  termsVersion: string;
+  ipAddress?: string;
+  userAgent?: string;
+  hashReceipt: string;
+  signedAt: string;
+}
+
+export type DocumentClassification = 'PUBLIC' | 'CONFIDENTIAL' | 'RESTRICTED';
+
+export type VirusScanStatus = 'CLEAN' | 'PENDING' | 'INFECTED';
+
+export interface SecureDocument {
+  id: string | number;
+  contractId?: string | number;
+  jobId?: string | number;
+  ownerId: string | number;
+  ownerName?: string;
+  fileName: string;
+  fileSize: number;
+  contentType: string;
+  storagePath?: string;
+  sha256Hash: string;
+  classification: DocumentClassification;
+  virusScanStatus: VirusScanStatus;
+  version: number;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface DocumentAccessLog {
+  id: string | number;
+  documentId: string | number;
+  userId?: string | number;
+  userName?: string;
+  action: 'UPLOAD' | 'DOWNLOAD' | 'VIEW_METADATA' | 'DELETE' | string;
+  timestamp: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export type ContractTimelineEventType =
+  | 'JOB_CREATED'
+  | 'PROPOSAL_SUBMITTED'
+  | 'PROPOSAL_ACCEPTED'
+  | 'CONFLICT_CHECK'
+  | 'CONFLICT_CLEARED'
+  | 'TERMS_SIGNED'
+  | 'CONTRACT_SIGNED'
+  | 'FUNDING_LOCKED'
+  | 'DOCUMENT_ATTACHED'
+  | 'MILESTONE_CREATED'
+  | 'MILESTONE_SUBMITTED'
+  | 'MILESTONE_APPROVED'
+  | 'MILESTONE_COMPLETED'
+  | 'PAYMENT_RELEASED'
+  | 'CONTRACT_COMPLETED'
+  | 'CONTRACT_TERMINATED'
+  | string;
+
+export interface ContractTimelineEvent {
+  id: string;
+  contractId?: string | number;
+  eventType: ContractTimelineEventType;
+  title: string;
+  description: string;
+  timestamp: string;
+  actorName?: string;
+  actorRole?: string;
+  status?: string;
+  hashReceipt?: string;
+  termsVersion?: string;
+  documentId?: string | number;
+  milestoneId?: string | number;
+  metadata?: Record<string, any>;
+}
+
+export interface ContractTimelineDto {
+  contractId: string | number;
+  contractTitle?: string;
+  events: ContractTimelineEvent[];
+}
+
+export interface AcceptContractRequestDto {
+  proposalId: number | string;
+  termsVersion?: string;
+  notes?: string;
+}
+
 export interface Contract {
   id: string;
   jobId: string;
@@ -407,6 +514,7 @@ export interface Contract {
   clientName: string;
   lawyerId: string;
   lawyerName: string;
+  lawyerPhotoUrl?: string;
   lawyerOab: string;
   totalValue: number;
   escrowBalance: number;
@@ -417,6 +525,14 @@ export interface Contract {
   milestones: Milestone[];
   termsPdfUrl?: string;
   progressPercentage: number;
+  // Phase 3 extensions
+  conflictStatus?: ConflictStatus | string;
+  termsVersion?: string;
+  signedAt?: string;
+  hashReceipt?: string;
+  signatures?: ContractSignature[];
+  documents?: SecureDocument[];
+  timelineEvents?: ContractTimelineEvent[];
 }
 
 export type PaymentType =

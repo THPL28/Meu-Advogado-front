@@ -19,8 +19,9 @@ import {
   Building2
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
-import { ProposalStatus, Job } from '../types';
+import { ProposalStatus, Job, Proposal } from '../types';
 import { proposalsApi } from '../services/api';
+import { AcceptProposalModal } from '../components/proposals/AcceptProposalModal';
 
 const ExpandableText = ({ text, maxLength = 250 }: { text: string; maxLength?: number }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -137,12 +138,15 @@ export const ProposalsPage: React.FC = () => {
 
   const jobsWithProposals = jobs.filter(j => proposals.some(p => p.jobId === j.id));
 
-  const handleAcceptProposal = async (proposalId: string) => {
-    try {
-      await proposalsApi.acceptProposal(proposalId);
-      await refreshData();
-    } catch (err) {
-      console.error('Failed to accept proposal:', err);
+  // Phase 3 Accept Proposal Modal State
+  const [acceptingProposal, setAcceptingProposal] = useState<Proposal | null>(null);
+  const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
+
+  const handleAcceptProposal = (proposalId: string) => {
+    const prop = proposals.find(p => String(p.id) === String(proposalId));
+    if (prop) {
+      setAcceptingProposal(prop);
+      setIsAcceptModalOpen(true);
     }
   };
 
@@ -347,8 +351,8 @@ export const ProposalsPage: React.FC = () => {
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Proposta Aceita • Contrato em Execução
                         </span>
                       ) : isRejected ? (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-muted text-muted-foreground/90 border border-border flex items-center gap-1.5">
-                          <XCircle className="w-4 h-4 text-muted-foreground/90" /> Não Selecionado para este Projeto
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-muted text-muted-foreground border border-border flex items-center gap-1.5">
+                          <XCircle className="w-4 h-4 text-muted-foreground" /> Não Selecionado — Demanda Contratada
                         </span>
                       ) : (
                         <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
@@ -544,9 +548,9 @@ export const ProposalsPage: React.FC = () => {
                         Proposta Aceita • Contrato em Execução
                       </span>
                     ) : isRejected ? (
-                      <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-muted text-muted-foreground/90 border border-border flex items-center gap-1.5">
-                        <XCircle className="w-4 h-4 text-muted-foreground/90" />
-                        Não Selecionado para este Projeto
+                      <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-muted text-muted-foreground border border-border flex items-center gap-1.5">
+                        <XCircle className="w-4 h-4 text-muted-foreground" />
+                        Não Selecionado — Demanda Contratada
                       </span>
                     ) : (
                       <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
@@ -569,7 +573,7 @@ export const ProposalsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => openNegotiationChat(prop.id)}
-                      className="px-4 py-2.5 bg-card hover:bg-background text-foreground/90 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer border border-border shadow-xs"
+                      className="px-4 py-2.5 bg-card hover:bg-background text-foreground font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer border border-border shadow-xs"
                     >
                       <MessageSquare className="w-4 h-4 text-emerald-600" />
                       Conversar / Negociar
@@ -593,6 +597,20 @@ export const ProposalsPage: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Accept Proposal Modal with Conflict Check & SHA-256 Receipt */}
+      <AcceptProposalModal
+        isOpen={isAcceptModalOpen}
+        proposal={acceptingProposal}
+        job={jobs.find(j => String(j.id) === String(acceptingProposal?.jobId))}
+        onSuccess={async () => {
+          await refreshData();
+        }}
+        onClose={() => {
+          setIsAcceptModalOpen(false);
+          setAcceptingProposal(null);
+        }}
+      />
 
     </div>
   );

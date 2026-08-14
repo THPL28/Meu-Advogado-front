@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   FileText, ShieldCheck, CheckCircle2, Clock, Star, 
   AlertCircle, ChevronRight, ChevronDown, ChevronUp, Lock, Check, Send, 
-  MessageSquare, XCircle, Sparkles, AlertTriangle
+  MessageSquare, XCircle, Sparkles, AlertTriangle, Hash, Copy, Download,
+  PlusCircle, Loader2, Shield, Scale, History
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
-import { contractsApi, reviewsApi } from '../services/api';
-import { Contract, Milestone } from '../types';
+import { contractsApi, reviewsApi, documentsApi } from '../services/api';
+import { Contract, Milestone, SecureDocument, ContractTimelineEvent } from '../types';
+import { UploadDocumentModal } from '../components/documents/UploadDocumentModal';
 
 const RatingRow = ({ label, value, onChange }: { label: string, value: number, onChange: (val: number) => void }) => (
   <div className="flex items-center justify-between">
@@ -31,9 +33,65 @@ const RatingRow = ({ label, value, onChange }: { label: string, value: number, o
 );
 
 export const ContractsPage: React.FC = () => {
-  const { contracts, role, verificationStatus, setActiveTab, refreshData } = useLegalPlatform();
+  const { 
+    contracts, 
+    role, 
+    verificationStatus, 
+    setActiveTab, 
+    refreshData,
+    isUploadDocModalOpen,
+    setIsUploadDocModalOpen
+  } = useLegalPlatform();
 
   const [collapsedContracts, setCollapsedContracts] = useState<Record<string, boolean>>({});
+  const [contractTab, setContractTab] = useState<Record<string, 'MILESTONES' | 'DOCUMENTS' | 'TIMELINE'>>({});
+  const [contractDocs, setContractDocs] = useState<Record<string, SecureDocument[]>>({});
+  const [contractTimelines, setContractTimelines] = useState<Record<string, ContractTimelineEvent[]>>({});
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [copiedHashId, setCopiedHashId] = useState<string | null>(null);
+  const [copiedDocHashId, setCopiedDocHashId] = useState<string | null>(null);
+  const [uploadDocContractId, setUploadDocContractId] = useState<string | null>(null);
+
+  useEffect(() => {
+    contracts.forEach((c) => {
+      if (c.id) {
+        contractsApi.getTimeline(c.id).then((tl) => {
+          if (tl?.events && tl.events.length > 0) {
+            setContractTimelines((prev) => ({ ...prev, [c.id]: tl.events }));
+          }
+        }).catch(() => {});
+
+        documentsApi.getContractDocuments(c.id).then((docs) => {
+          if (docs && docs.length > 0) {
+            setContractDocs((prev) => ({ ...prev, [c.id]: docs }));
+          }
+        }).catch(() => {});
+      }
+    });
+  }, [contracts]);
+
+  const handleCopyHash = (contractId: string, hash: string) => {
+    navigator.clipboard.writeText(hash);
+    setCopiedHashId(contractId);
+    setTimeout(() => setCopiedHashId(null), 3000);
+  };
+
+  const handleCopyDocHash = (docId: string | number, hash: string) => {
+    navigator.clipboard.writeText(hash);
+    setCopiedDocHashId(String(docId));
+    setTimeout(() => setCopiedDocHashId(null), 3000);
+  };
+
+  const handleDownloadSecureDoc = async (docId: string | number, fileName: string) => {
+    setDownloadingDocId(String(docId));
+    try {
+      await documentsApi.downloadSecureDocument(docId, fileName);
+    } catch (e) {
+      console.error('Download error:', e);
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
 
   const toggleCollapse = (contractId: string) => {
     setCollapsedContracts(prev => ({
@@ -240,12 +298,18 @@ export const ContractsPage: React.FC = () => {
               <div key={contract.id} className="bg-card border border-border/80 rounded-3xl overflow-hidden shadow-xs">
                 
                 {/* Contract Header */}
-                <div className="p-6 sm:p-8 border-b border-border/50 bg-background/50">
+                <div className="p-6 sm:p-8 border-b border-border/50 bg-background/50 space-y-5">
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center gap-1.5">
                           <ShieldCheck className="w-4 h-4" /> Escrow Ativo
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/60 flex items-center gap-1">
+                          <Scale className="w-3.5 h-3.5" /> Termos: {contract.termsVersion || 'v1.0'}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center gap-1">
+                          <Shield className="w-3.5 h-3.5" /> Conflito: {contract.conflictStatus || 'CLEAR'}
                         </span>
                         {contract.status === 'COMPLETED' && (
                           <span className="px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/60">
@@ -253,15 +317,17 @@ export const ContractsPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+
                       <h3 className="text-xl sm:text-2xl font-extrabold text-foreground leading-tight">{contract.jobTitle}</h3>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground/90 font-medium">
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground font-medium">
                         <p>{role === 'CLIENT' ? 'Advogado: ' : 'Cliente: '} <span className="text-foreground font-bold">{role === 'CLIENT' ? contract.lawyerName : contract.clientName}</span></p>
+                        {contract.lawyerOab && <p className="text-xs text-muted-foreground font-mono">({contract.lawyerOab})</p>}
                         {contract.processNumber && <p className="font-mono text-emerald-600 dark:text-emerald-400">Ref: {contract.processNumber}</p>}
                       </div>
                     </div>
                     
                     <div className="bg-card p-4 rounded-2xl border border-border/60 min-w-[200px] text-right shadow-sm">
-                      <p className="text-xs font-bold text-muted-foreground/90 uppercase tracking-wider">Valor do Contrato</p>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Valor do Mandato</p>
                       <p className="text-2xl font-extrabold text-foreground font-mono tracking-tight mt-1">
                         R$ {contract.totalValue.toLocaleString('pt-BR')}
                       </p>
@@ -269,7 +335,7 @@ export const ContractsPage: React.FC = () => {
                   </div>
 
                   {/* Financial Summary */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200/60 flex items-center justify-between">
                       <span className="text-sm font-bold text-amber-600 dark:text-amber-400">Retido em Custódia</span>
                       <span className="text-lg font-extrabold text-amber-600 dark:text-amber-400 font-mono">R$ {contract.escrowBalance.toLocaleString('pt-BR')}</span>
@@ -279,49 +345,246 @@ export const ContractsPage: React.FC = () => {
                       <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">R$ {contract.releasedBalance.toLocaleString('pt-BR')}</span>
                     </div>
                   </div>
-                </div>
 
-                {/* Milestones Stepper */}
-                <div className="p-6 sm:p-8">
-                  <div 
-                    className="flex items-center justify-between cursor-pointer group"
-                    onClick={() => toggleCollapse(contract.id)}
-                  >
-                    <h4 className="text-sm font-extrabold text-foreground uppercase tracking-wider group-hover:text-emerald-600 transition-colors">
-                      Marcos de Entrega
-                    </h4>
-                    <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
-                      {collapsedContracts[contract.id] ? (
-                        <ChevronDown className="w-5 h-5" />
-                      ) : (
-                        <ChevronUp className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-                  
-                  {!collapsedContracts[contract.id] && (
-                    <div className="mt-6 space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                      {contract.milestones.map((m, index) => (
-                        <div key={m.id} className="relative flex flex-col md:flex-row items-start justify-between md:odd:flex-row-reverse group is-active gap-4">
-                          <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-muted text-muted-foreground/90 shadow-sm shrink-0 absolute left-0 md:relative md:order-1 md:left-auto md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 transition-colors">
-                            {m.status === 'PAID' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <span className="font-bold text-sm">{index + 1}</span>}
-                          </div>
-                          <div className="w-full ml-14 md:ml-0 md:w-[calc(50%-2.5rem)] p-5 bg-card border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                              {getMilestoneBadge(m.status)}
-                              <span className="text-sm font-extrabold font-mono text-emerald-600 dark:text-emerald-400">R$ {m.value.toLocaleString('pt-BR')}</span>
-                            </div>
-                            <h5 className="font-bold text-foreground mb-1.5">{m.title}</h5>
-                            <p className="text-sm text-muted-foreground/90 leading-relaxed mb-4">{m.description}</p>
-                            <div className="pt-4 border-t border-border/50">
-                              {renderMilestoneActions(contract.id, m)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                  {/* SHA-256 Digital Receipt Bar */}
+                  {contract.hashReceipt && (
+                    <div className="p-3 bg-muted/40 rounded-xl border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Hash className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="text-muted-foreground font-sans font-semibold">Recibo SHA-256:</span>
+                        <span className="text-foreground/90 font-mono truncate">{contract.hashReceipt}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyHash(contract.id, contract.hashReceipt!)}
+                        className="px-3 py-1 bg-card hover:bg-background rounded-lg border border-border text-xs font-sans font-semibold text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 shrink-0 self-start sm:self-center cursor-pointer"
+                      >
+                        {copiedHashId === contract.id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" /> Copiar Hash
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
+
+                {/* Sub-Navigation Tabs */}
+                <div className="px-6 sm:px-8 pt-4 border-b border-border/50 bg-background/30 flex items-center gap-2 overflow-x-auto">
+                  <button
+                    onClick={() => setContractTab(prev => ({ ...prev, [contract.id]: 'MILESTONES' }))}
+                    className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors cursor-pointer border-b-2 ${
+                      (contractTab[contract.id] || 'MILESTONES') === 'MILESTONES'
+                        ? 'border-emerald-600 text-emerald-600 bg-card'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Marcos de Entrega ({contract.milestones.length})
+                  </button>
+
+                  <button
+                    onClick={() => setContractTab(prev => ({ ...prev, [contract.id]: 'DOCUMENTS' }))}
+                    className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${
+                      contractTab[contract.id] === 'DOCUMENTS'
+                        ? 'border-emerald-600 text-emerald-600 bg-card'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Lock className="w-3.5 h-3.5" /> Cofre Seguro de Documentos ({(contractDocs[contract.id] || contract.documents || []).length})
+                  </button>
+
+                  <button
+                    onClick={() => setContractTab(prev => ({ ...prev, [contract.id]: 'TIMELINE' }))}
+                    className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${
+                      contractTab[contract.id] === 'TIMELINE'
+                        ? 'border-emerald-600 text-emerald-600 bg-card'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <History className="w-3.5 h-3.5" /> Trilha Forense & Timeline
+                  </button>
+                </div>
+
+                {/* Tab 1: Milestones Stepper */}
+                {(!contractTab[contract.id] || contractTab[contract.id] === 'MILESTONES') && (
+                  <div className="p-6 sm:p-8">
+                    <div 
+                      className="flex items-center justify-between cursor-pointer group"
+                      onClick={() => toggleCollapse(contract.id)}
+                    >
+                      <h4 className="text-sm font-extrabold text-foreground uppercase tracking-wider group-hover:text-emerald-600 transition-colors">
+                        Marcos de Entrega
+                      </h4>
+                      <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
+                        {collapsedContracts[contract.id] ? (
+                          <ChevronDown className="w-5 h-5" />
+                        ) : (
+                          <ChevronUp className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
+                    
+                    {!collapsedContracts[contract.id] && (
+                      <div className="mt-6 space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+                        {contract.milestones.map((m, index) => (
+                          <div key={m.id} className="relative flex flex-col md:flex-row items-start justify-between md:odd:flex-row-reverse group is-active gap-4">
+                            <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-muted text-muted-foreground shadow-sm shrink-0 absolute left-0 md:relative md:order-1 md:left-auto md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 transition-colors">
+                              {m.status === 'PAID' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <span className="font-bold text-sm">{index + 1}</span>}
+                            </div>
+                            <div className="w-full ml-14 md:ml-0 md:w-[calc(50%-2.5rem)] p-5 bg-card border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                {getMilestoneBadge(m.status)}
+                                <span className="text-sm font-extrabold font-mono text-emerald-600 dark:text-emerald-400">R$ {m.value.toLocaleString('pt-BR')}</span>
+                              </div>
+                              <h5 className="font-bold text-foreground mb-1.5">{m.title}</h5>
+                              <p className="text-sm text-muted-foreground leading-relaxed mb-4">{m.description}</p>
+                              <div className="pt-4 border-t border-border/50">
+                                {renderMilestoneActions(contract.id, m)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 2: Secure Document Vault */}
+                {contractTab[contract.id] === 'DOCUMENTS' && (
+                  <div className="p-6 sm:p-8 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-extrabold text-foreground uppercase tracking-wider">
+                        Cofre de Documentos do Mandato
+                      </h4>
+                      <button
+                        onClick={() => {
+                          setUploadDocContractId(contract.id);
+                          setIsUploadDocModalOpen(true);
+                        }}
+                        className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1.5 cursor-pointer bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-200/60"
+                      >
+                        <PlusCircle className="w-4 h-4" /> Anexar Documento Seguro
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {(contractDocs[contract.id] || contract.documents || []).length > 0 ? (
+                        (contractDocs[contract.id] || contract.documents || []).map((doc) => (
+                          <div key={doc.id} className="p-4 bg-background border border-border/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="p-2.5 rounded-xl bg-muted text-emerald-600 shrink-0">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-xs font-bold text-foreground truncate">{doc.fileName}</p>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                    doc.classification === 'CONFIDENTIAL' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                    doc.classification === 'RESTRICTED' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                                    'bg-blue-50 text-blue-700 border border-blue-200'
+                                  }`}>
+                                    {doc.classification}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                    <ShieldCheck className="w-3 h-3 text-emerald-600" /> {doc.virusScanStatus}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {(doc.fileSize / 1024).toFixed(1)} KB • {new Date(doc.createdAt).toLocaleDateString('pt-BR')} • {doc.ownerName ? `Enviado por ${doc.ownerName}` : 'Autenticado'}
+                                </p>
+                                {doc.sha256Hash && (
+                                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground pt-0.5">
+                                    <Hash className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span className="truncate max-w-xs">{doc.sha256Hash}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyDocHash(doc.id, doc.sha256Hash)}
+                                      className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                      title="Copiar Hash"
+                                    >
+                                      {copiedDocHashId === String(doc.id) ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              <button
+                                onClick={() => handleDownloadSecureDoc(doc.id, doc.fileName)}
+                                disabled={downloadingDocId === String(doc.id)}
+                                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                              >
+                                {downloadingDocId === String(doc.id) ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Baixando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-3.5 h-3.5" /> Download
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center bg-background/50 rounded-2xl border border-dashed border-border space-y-2">
+                          <Lock className="w-8 h-8 text-muted-foreground mx-auto" />
+                          <p className="text-xs font-semibold text-muted-foreground">Nenhum documento anexado a este contrato ainda.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 3: Timeline & Forensic Trail */}
+                {contractTab[contract.id] === 'TIMELINE' && (
+                  <div className="p-6 sm:p-8 space-y-6">
+                    <div>
+                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                        Trilha Forense Imutável (ADR-012)
+                      </span>
+                      <h4 className="text-sm font-extrabold text-foreground uppercase tracking-wider mt-1">
+                        Linha do Tempo Contratual
+                      </h4>
+                    </div>
+
+                    <div className="space-y-6 pl-4 border-l-2 border-emerald-500/30">
+                      {(contractTimelines[contract.id] || contract.timelineEvents || []).length > 0 ? (
+                        (contractTimelines[contract.id] || contract.timelineEvents || []).map((event) => (
+                          <div key={event.id} className="relative space-y-1">
+                            <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-600 ring-4 ring-white" />
+                            <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                              <span className="font-bold text-foreground">{event.title}</span>
+                              <span className="text-xs text-muted-foreground font-mono">
+                                {new Date(event.timestamp).toLocaleString('pt-BR')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">{event.description}</p>
+                            {event.actorName && (
+                              <p className="text-[11px] text-emerald-600 font-medium">
+                                Por: {event.actorName} {event.actorRole ? `(${event.actorRole})` : ''}
+                              </p>
+                            )}
+                            {event.hashReceipt && (
+                              <p className="text-[10px] font-mono text-muted-foreground bg-muted/50 p-1.5 rounded-lg border border-border/40 truncate">
+                                Hash Receipt: {event.hashReceipt}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-xs text-muted-foreground py-4">
+                          Contrato formalizado com sucesso. Recibo SHA-256 e termos registrados.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Finalize Button */}
                 {allPaid && contract.status !== 'COMPLETED' && (
@@ -539,6 +802,14 @@ export const ContractsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Upload Document Modal */}
+      <UploadDocumentModal 
+        contractId={uploadDocContractId || undefined} 
+        onSuccess={async () => {
+          await refreshData();
+        }} 
+      />
 
     </div>
   );
