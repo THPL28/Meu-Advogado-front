@@ -20,39 +20,39 @@
 
 @layer base {
   :root {
-    --background: var(--color-slate-50);
-    --foreground: var(--color-slate-900);
+    --background: #F8FAFC;
+    --foreground: #0F172A;
     
-    --card: var(--color-white);
-    --card-foreground: var(--color-slate-900);
+    --card: #FFFFFF;
+    --card-foreground: #0F172A;
     
-    --muted: var(--color-slate-100);
-    --muted-foreground: var(--color-slate-700);
+    --muted: #F1F5F9;
+    --muted-foreground: #475569;
     
-    --border: var(--color-slate-200);
-    --border-strong: var(--color-slate-300);
-    --border-alt: var(--color-slate-800);
+    --border: #E2E8F0;
+    --border-strong: #CBD5E1;
+    --border-alt: #0F172A;
     
-    --alt: var(--color-slate-900);
-    --alt-foreground: var(--color-white);
+    --alt: #0F172A;
+    --alt-foreground: #FFFFFF;
   }
 
   .dark {
-    --background: #0F172A;
+    --background: #0B1120;
     --foreground: #F8FAFC;
     
-    --card: #1E293B;
+    --card: #131E32;
     --card-foreground: #F8FAFC;
     
     --muted: #0F172A;
     --muted-foreground: #94A3B8;
     
-    --border: #334155;
-    --border-strong: #475569;
-    --border-alt: #1E293B;
+    --border: #1E293B;
+    --border-strong: #334155;
+    --border-alt: #131E32;
     
     --alt: #F8FAFC;
-    --alt-foreground: #0F172A;
+    --alt-foreground: #0B1120;
   }
 
   body {

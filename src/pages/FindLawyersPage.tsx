@@ -116,15 +116,15 @@ export const FindLawyersPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Global Search Bar inside Banner */}
+        {/* Global Search Bar inside Banner - Crisp Solid White for Maximum Legibility */}
         <div className="mt-6 relative max-w-2xl z-10">
-          <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/90" />
+          <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Busque por nome do advogado, especialidade (ex: LGPD, Trabalhista, M&A) ou cidade..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3.5 bg-card/10 backdrop-blur-md border border-white/20 rounded-2xl text-xs sm:text-sm text-white placeholder:text-muted-foreground/90 focus:bg-card focus:text-foreground focus:placeholder:text-muted-foreground/90 focus:outline-none transition-all shadow-inner"
+            className="w-full pl-12 pr-4 py-3.5 bg-white text-slate-900 placeholder:text-slate-400 rounded-2xl text-xs sm:text-sm font-medium shadow-lg border border-white/60 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
           />
         </div>
       </div>
@@ -433,24 +433,10 @@ export const FindLawyersPage: React.FC = () => {
                             openInviteModal(lawyer.id);
                           }
                         }}
-                        className="px-3 py-2 rounded-xl bg-card border border-border hover:bg-background text-foreground/90 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                        Chat
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          if (!user) {
-                            setActiveTab('login');
-                          } else {
-                            openInviteModal(lawyer.id);
-                          }
-                        }}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <Briefcase className="w-3.5 h-3.5" />
-                        Convidar
+                        Convidar para Demanda
                       </button>
                     </div>
                   </div>
