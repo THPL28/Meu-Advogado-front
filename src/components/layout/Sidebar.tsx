@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
   LayoutDashboard,
   Briefcase,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { ActiveTab } from '../../context/PlatformContext';
+import { UserAvatar } from '../ui/UserAvatar';
 
 const getVerificationBadgeConfig = (status?: string) => {
   switch (status) {

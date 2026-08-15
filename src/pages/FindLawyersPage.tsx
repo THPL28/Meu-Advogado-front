@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import {
   Search,
   Filter,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
 import { FullLawyerProfile } from '../types';
+import { UserAvatar } from '../components/ui/UserAvatar';
 
 export const FindLawyersPage: React.FC = () => {
   const {

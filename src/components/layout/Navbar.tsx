@@ -293,17 +293,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-xl bg-muted hover:bg-muted/80 transition-all border border-border cursor-pointer"
             >
-              {user?.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user?.name || 'Avatar'}
-                  className="w-8 h-8 rounded-lg object-cover ring-2 ring-emerald-500/30"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs ring-2 ring-emerald-500/30">
-                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                </div>
-              )}
+              <UserAvatar
+                src={user?.avatarUrl}
+                name={user?.name}
+                size="sm"
+              />
               <ChevronDown className="w-4 h-4 text-muted-foreground/90" />
             </button>
 
@@ -465,17 +459,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* User Profile Footer */}
             <div className="pt-4 border-t border-border space-y-3">
               <div className="flex items-center gap-3">
-                {user?.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user?.name || 'Avatar'}
-                    className="w-10 h-10 rounded-xl object-cover ring-2 ring-emerald-600"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-sm ring-2 ring-emerald-600 shrink-0">
-                    {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                )}
+                <UserAvatar
+                  src={user?.avatarUrl}
+                  name={user?.name}
+                  size="md"
+                />
                 <div>
                   <p className="text-xs font-bold text-foreground">{user?.name}</p>
                   <p className="text-xs text-muted-foreground/90">{user?.email}</p>
