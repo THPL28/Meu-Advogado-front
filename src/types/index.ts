@@ -366,6 +366,8 @@ export interface Proposal {
   jobId: string;
   jobTitle: string;
   processNumber?: string;
+  clientId?: string;
+  clientName?: string;
   lawyerId: string;
   lawyerName: string;
   lawyerAvatar: string;

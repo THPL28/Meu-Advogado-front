@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   Job,
   Proposal,
@@ -313,15 +313,20 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const sendProjectInvite = async (jobId: string, lawyerId: string, customMessage: string) => {
-    const newNotif: Notification = {
-      id: `notif_${Date.now()}`,
-      title: 'Convite para Projeto Recebido!',
-      message: `Você foi convidado para apresentar proposta na demanda #${jobId}. Mensagem: "${customMessage}"`,
-      type: 'PROPOSAL_RECEIVED',
-      timestamp: 'Agora mesmo',
-      isRead: false
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+    try {
+      await jobsApi.inviteLawyer(jobId, lawyerId, customMessage);
+      const newNotif: Notification = {
+        id: `notif_${Date.now()}`,
+        title: 'Convite Enviado com Sucesso!',
+        message: `Convite enviado ao advogado para a demanda #${jobId}.`,
+        type: 'PROPOSAL_RECEIVED',
+        timestamp: 'Agora mesmo',
+        isRead: false
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+    } catch (err) {
+      console.error('Failed to send project invite:', err);
+    }
   };
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);

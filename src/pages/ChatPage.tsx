@@ -62,11 +62,20 @@ export const ChatPage: React.FC = () => {
 
   useEffect(() => {
     async function loadChatData() {
-      const convs = await chatApi.getConversations();
+      let convs = await chatApi.getConversations();
+      if (activeConversationId && !convs.some((c) => c.id === activeConversationId)) {
+        if (activeConversationId.startsWith('conv_prop_')) {
+          const propId = activeConversationId.replace('conv_prop_', '');
+          const extraConv = await chatApi.getOrCreateNegotiationChat(propId).catch(() => null);
+          if (extraConv) convs = [extraConv, ...convs];
+        }
+      }
       setConversations(convs);
       if (activeConversationId) {
         setActiveConvId(activeConversationId);
         setMobileShowThread(true);
+      } else if (convs.length > 0 && !activeConvId) {
+        setActiveConvId(convs[0].id);
       }
     }
     loadChatData();

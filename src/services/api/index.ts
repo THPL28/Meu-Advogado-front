@@ -431,6 +431,8 @@ function mapBackendProposal(raw: Record<string, unknown>): Proposal {
     jobId: String(raw.jobId ?? (raw.job as any)?.jobId ?? ''),
     jobTitle: (raw.jobTitle as string) || ((raw.job as any)?.title as string) || 'Demanda Jurídica',
     processNumber: (raw.processNumber as string) || ((raw.job as any)?.processNumber as string) || undefined,
+    clientId: String(raw.clientId ?? (raw.job as any)?.client?.id ?? ''),
+    clientName: (raw.clientName as string) || ((raw.job as any)?.client ? `${(raw.job as any).client.firstName || ''} ${(raw.job as any).client.lastName || ''}`.trim() : 'Cliente'),
     lawyerId: String(raw.freelancerId ?? raw.lawyerId ?? (raw.freelancer as any)?.id ?? ''),
     lawyerName: (raw.lawyerName as string) || ((raw.freelancer as any) ? `${(raw.freelancer as any).firstName || ''} ${(raw.freelancer as any).lastName || ''}`.trim() : 'Advogado'),
     lawyerAvatar: (raw.lawyerAvatar as string) || (raw.freelancer as any)?.photoUrl || (raw.lawyer as any)?.photoUrl || '',
@@ -948,6 +950,19 @@ export const jobsApi = {
   async reopenJob(jobId: string): Promise<Job | null> {
     return await jobsApi.updateJobStatus(jobId, 'OPEN');
   },
+
+  async inviteLawyer(jobId: string | number, lawyerId: string | number, message?: string): Promise<boolean> {
+    try {
+      await http(`/api/jobs/${jobId}/invite`, {
+        method: 'POST',
+        body: JSON.stringify({ lawyerId: Number(lawyerId), message }),
+      });
+      return true;
+    } catch (e) {
+      console.warn('Invite lawyer error:', e);
+      return false;
+    }
+  },
 };
 
 // ─────────────────────────────────────────────
@@ -956,9 +971,16 @@ export const jobsApi = {
 export const proposalsApi = {
   async getProposals(filters?: { jobId?: string; status?: ProposalStatus }): Promise<Proposal[]> {
     try {
-      const endpoint = filters?.jobId ? `/api/proposals/job/${filters.jobId}` : '/api/proposals/my';
-      const data = await http<any[]>(endpoint);
-      let list = (Array.isArray(data) ? data : []).map(mapBackendProposal);
+      const currentUser = await authApi.getCurrentUser();
+      let endpoint = '/api/proposals/my';
+      if (filters?.jobId) {
+        endpoint = `/api/proposals/job/${filters.jobId}`;
+      } else if (currentUser?.role === 'CLIENT') {
+        endpoint = '/api/proposals/received';
+      }
+      const res = await http<any>(endpoint);
+      const rawList = Array.isArray(res) ? res : (res?.proposals || res?.content || []);
+      let list = rawList.map(mapBackendProposal);
       if (filters?.status) list = list.filter((p) => p.status === filters.status);
       return list;
     } catch (e) {
@@ -969,8 +991,9 @@ export const proposalsApi = {
 
   async getReceivedProposals(): Promise<Proposal[]> {
     try {
-      const data = await http<any[]>('/api/proposals/received');
-      return (Array.isArray(data) ? data : []).map(mapBackendProposal);
+      const res = await http<any>('/api/proposals/received');
+      const rawList = Array.isArray(res) ? res : (res?.proposals || res?.content || []);
+      return rawList.map(mapBackendProposal);
     } catch (e) {
       console.warn('Received proposals fetch error:', e);
       return [];
@@ -1385,31 +1408,70 @@ export function moderateContent(text: string, isNegotiation: boolean): { content
 export const chatApi = {
   async getConversations(): Promise<ChatConversation[]> {
     try {
-      const contracts = await contractsApi.getContracts();
       const currentUser = await authApi.getCurrentUser();
-      if (contracts.length > 0 && currentUser) {
-        return contracts.map((c) => {
-          const isClient = String(c.clientId) === String(currentUser.id);
-          return {
-            id: `conv_contract_${c.id}`,
-            jobId: String(c.jobId),
-            jobTitle: c.jobTitle,
-            state: 'EXECUCAO' as const,
+      if (!currentUser) return [];
+
+      const [contracts, proposals] = await Promise.all([
+        contractsApi.getContracts().catch(() => []),
+        proposalsApi.getProposals().catch(() => []),
+      ]);
+
+      const convList: ChatConversation[] = [];
+
+      // 1. Contract conversations (Active execution)
+      contracts.forEach((c) => {
+        const isClient = String(c.clientId) === String(currentUser.id);
+        convList.push({
+          id: `conv_contract_${c.id}`,
+          jobId: String(c.jobId),
+          jobTitle: c.jobTitle,
+          state: 'EXECUCAO',
+          otherUser: {
+            id: isClient ? String(c.lawyerId) : String(c.clientId),
+            name: isClient ? c.lawyerName : c.clientName,
+            avatar: '',
+            role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
+            oabOrCompany: isClient ? c.lawyerOab : undefined,
+            isOnline: false,
+          },
+          lastMessage: 'Mandato formalizado e sincronizado.',
+          lastMessageTime: '',
+          unreadCount: 0,
+        });
+      });
+
+      // 2. Pre-contractual proposals / negotiation threads
+      proposals.forEach((p) => {
+        const isClient = currentUser.role === 'CLIENT';
+        const convId = `conv_prop_${p.id}`;
+        // Avoid duplicate if already covered by contract
+        const alreadyInContract = contracts.some((c) => String(c.jobId) === String(p.jobId));
+        if (!alreadyInContract) {
+          convList.push({
+            id: convId,
+            jobId: String(p.jobId),
+            jobTitle: `Negociação: ${p.jobTitle || 'Demanda'}`,
+            proposalId: String(p.id),
+            proposalValue: p.value,
+            lawyerName: p.lawyerName || 'Advogado',
+            clientName: isClient ? currentUser.name : (p.clientName || 'Cliente'),
+            state: 'NEGOCIACAO',
             otherUser: {
-              id: isClient ? String(c.lawyerId) : String(c.clientId),
-              name: isClient ? c.lawyerName : c.clientName,
-              avatar: '',
+              id: isClient ? (p.lawyerId || '') : (currentUser.id || ''),
+              name: isClient ? (p.lawyerName || 'Advogado') : (p.clientName || 'Cliente'),
+              avatar: isClient ? (p.lawyerAvatar || '') : '',
               role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
-              oabOrCompany: isClient ? c.lawyerOab : undefined,
+              oabOrCompany: isClient ? p.lawyerOab : undefined,
               isOnline: false,
             },
-            lastMessage: 'Contrato ativo e sincronizado.',
-            lastMessageTime: '',
+            lastMessage: `Proposta enviada: R$ ${(p.value || 0).toLocaleString('pt-BR')}`,
+            lastMessageTime: p.createdAt ? new Date(p.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
             unreadCount: 0,
-          };
-        });
-      }
-      return [];
+          });
+        }
+      });
+
+      return convList;
     } catch (e) {
       console.warn('Chat conversations error:', e);
       return [];
@@ -1417,38 +1479,63 @@ export const chatApi = {
   },
 
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
-    if (conversationId && conversationId.startsWith('conv_contract_')) {
+    if (!conversationId) return [];
+
+    if (conversationId.startsWith('conv_prop_')) {
+      const proposalId = conversationId.replace('conv_prop_', '');
       try {
-        const contractId = conversationId.replace('conv_contract_', '');
-        const res = await http<any>(`/api/chat/messages/${contractId}`);
-        const list = res?.messages || res || [];
-        if (Array.isArray(list)) {
-          return list.map((m) => ({
-            id: String(m.messageId ?? m.id ?? ''),
-            conversationId,
-            senderId: String(m.senderId ?? ''),
-            senderName: m.senderName || 'Participante',
-            senderAvatar: '',
-            content: m.message || m.content || '',
-            timestamp: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-            isRead: Boolean(m.isRead),
-          }));
-        }
-        return [];
+        const res = await negotiationsApi.getMessages(proposalId);
+        const list = Array.isArray(res) ? res : (res as any)?.content || [];
+        return list.map((m: any) => ({
+          id: String(m.id || ''),
+          conversationId,
+          senderId: String(m.senderId || ''),
+          senderName: m.senderName || 'Participante',
+          senderAvatar: '',
+          content: m.contentMasked || m.content || m.message || '',
+          timestamp: m.sentAt ? new Date(m.sentAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+          isRead: true,
+          wasModerated: Boolean(m.isModerated),
+        }));
       } catch (e) {
-        console.warn('Messages fetch error:', e);
+        console.warn('Negotiation messages fetch error:', e);
         return [];
       }
     }
+
+    if (conversationId.startsWith('conv_contract_')) {
+      try {
+        const contractId = conversationId.replace('conv_contract_', '');
+        const res = await http<any>(`/api/chat/messages/${contractId}`);
+        const list = Array.isArray(res) ? res : (res?.messages || res?.content || []);
+        return list.map((m: any) => ({
+          id: String(m.messageId ?? m.id ?? ''),
+          conversationId,
+          senderId: String(m.senderId ?? ''),
+          senderName: m.senderName || 'Participante',
+          senderAvatar: '',
+          content: m.message || m.content || '',
+          timestamp: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+          isRead: Boolean(m.isRead),
+        }));
+      } catch (e) {
+        console.warn('Contract messages fetch error:', e);
+        return [];
+      }
+    }
+
     return [];
   },
 
   async sendMessage(conversationId: string, content: string, attachments?: { name: string; size: string; type: 'PDF' | 'DOCX' | 'XLSX' | 'PNG' | 'JPG' }[]): Promise<ChatMessage> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
-    const { content: processedContent, wasModerated } = moderateContent(content, false);
+    const { content: processedContent, wasModerated } = moderateContent(content, conversationId.startsWith('conv_prop_'));
 
-    if (conversationId && conversationId.startsWith('conv_contract_')) {
+    if (conversationId.startsWith('conv_prop_')) {
+      const proposalId = conversationId.replace('conv_prop_', '');
+      await negotiationsApi.sendMessage(proposalId, processedContent).catch((e) => console.warn('Negotiation send error:', e));
+    } else if (conversationId.startsWith('conv_contract_')) {
       const contractId = conversationId.replace('conv_contract_', '');
       await http(`/api/chat/send/${contractId}`, {
         method: 'POST',
@@ -1475,6 +1562,7 @@ export const chatApi = {
     const prop = proposals.find((p) => String(p.id) === String(proposalId));
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
+    const isClient = currentUser.role === 'CLIENT';
 
     return {
       id: 'conv_prop_' + proposalId,
@@ -1483,14 +1571,14 @@ export const chatApi = {
       proposalId: String(proposalId),
       proposalValue: prop?.value || 0,
       lawyerName: prop?.lawyerName || 'Advogado',
-      clientName: currentUser.name,
+      clientName: isClient ? currentUser.name : (prop?.clientName || 'Cliente'),
       state: 'NEGOCIACAO',
       otherUser: {
-        id: prop?.lawyerId || '',
-        name: prop?.lawyerName || 'Advogado',
-        avatar: prop?.lawyerAvatar || '',
-        role: 'LAWYER',
-        oabOrCompany: prop?.lawyerOab,
+        id: isClient ? (prop?.lawyerId || '') : (currentUser.id || ''),
+        name: isClient ? (prop?.lawyerName || 'Advogado') : (prop?.clientName || 'Cliente'),
+        avatar: isClient ? (prop?.lawyerAvatar || '') : '',
+        role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
+        oabOrCompany: isClient ? prop?.lawyerOab : undefined,
         isOnline: false,
       },
       lastMessage: `Proposta enviada: R$ ${(prop?.value || 0).toLocaleString('pt-BR')}`,
@@ -1759,8 +1847,9 @@ export const documentsApi = {
 export const notificationsApi = {
   async getNotifications(): Promise<Notification[]> {
     try {
-      const data = await http<any[]>('/api/notifications/');
-      return (Array.isArray(data) ? data : []).map((n) => ({
+      const res = await http<any>('/api/notifications/');
+      const rawList = Array.isArray(res) ? res : (res?.notifications || res?.content || []);
+      return rawList.map((n: any) => ({
         id: String(n.notificationId ?? n.id ?? ''),
         title: n.title || 'Notificação',
         message: n.message || '',
@@ -1776,7 +1865,8 @@ export const notificationsApi = {
 
   async getUnreadCount(): Promise<number> {
     try {
-      const count = await http<number>('/api/notifications/unread/count');
+      const res = await http<any>('/api/notifications/unread/count');
+      const count = typeof res === 'number' ? res : (res?.count ?? 0);
       return typeof count === 'number' ? count : 0;
     } catch {
       return 0;
