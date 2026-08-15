@@ -292,7 +292,8 @@ export const ContractsPage: React.FC = () => {
           </div>
         ) : (
           contracts.map((contract) => {
-            const allPaid = contract.milestones.every(m => m.status === 'PAID');
+            const milestones = contract.milestones || [];
+            const allPaid = milestones.length > 0 && milestones.every(m => m.status === 'PAID');
 
             return (
               <div key={contract.id} className="bg-card border border-border/80 rounded-3xl overflow-hidden shadow-xs">
@@ -383,7 +384,7 @@ export const ContractsPage: React.FC = () => {
                         : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    Marcos de Entrega ({contract.milestones.length})
+                    Marcos de Entrega ({(contract.milestones || []).length})
                   </button>
 
                   <button
@@ -430,7 +431,7 @@ export const ContractsPage: React.FC = () => {
                     
                     {!collapsedContracts[contract.id] && (
                       <div className="mt-6 space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                        {contract.milestones.map((m, index) => (
+                        {(contract.milestones || []).map((m, index) => (
                           <div key={m.id} className="relative flex flex-col md:flex-row items-start justify-between md:odd:flex-row-reverse group is-active gap-4">
                             <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-muted text-muted-foreground shadow-sm shrink-0 absolute left-0 md:relative md:order-1 md:left-auto md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 transition-colors">
                               {m.status === 'PAID' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <span className="font-bold text-sm">{index + 1}</span>}
