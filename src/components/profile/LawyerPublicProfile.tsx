@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { FullLawyerProfile } from '../../types';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface LawyerPublicProfileProps {
   profileSlug?: string;
@@ -131,10 +132,10 @@ export const LawyerPublicProfile: React.FC<LawyerPublicProfileProps> = ({ profil
           {/* Avatar & Main Info */}
           <div className="flex flex-col sm:flex-row items-start gap-5">
             <div className="relative shrink-0">
-              <img
+              <UserAvatar
                 src={lawyer.avatarUrl}
-                alt={lawyer.name}
-                className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover ring-4 ring-emerald-500/20 shadow-md"
+                name={lawyer.name}
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl ring-4 ring-emerald-500/20 shadow-md text-2xl"
               />
               <span
                 className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center ${
@@ -472,10 +473,10 @@ export const LawyerPublicProfile: React.FC<LawyerPublicProfileProps> = ({ profil
                 <div key={rev.id} className="pt-4 first:pt-0 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img
+                      <UserAvatar
                         src={rev.reviewerAvatar}
-                        alt={rev.reviewerName}
-                        className="w-9 h-9 rounded-xl object-cover ring-1 ring-border/50"
+                        name={rev.reviewerName}
+                        size="sm"
                       />
                       <div>
                         <h4 className="font-bold text-xs text-foreground">{rev.reviewerName}</h4>

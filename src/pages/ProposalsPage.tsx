@@ -22,6 +22,7 @@ import { useLegalPlatform } from '../hooks/useLegalPlatform';
 import { ProposalStatus, Job, Proposal } from '../types';
 import { proposalsApi } from '../services/api';
 import { AcceptProposalModal } from '../components/proposals/AcceptProposalModal';
+import { UserAvatar } from '../components/ui/UserAvatar';
 
 const ExpandableText = ({ text, maxLength = 250 }: { text: string; maxLength?: number }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -497,10 +498,11 @@ export const ProposalsPage: React.FC = () => {
                       onClick={() => openLawyerProfile(prop.lawyerId)}
                       className="group flex items-center gap-3 cursor-pointer text-left"
                     >
-                      <img
+                      <UserAvatar
                         src={prop.lawyerAvatar}
-                        alt={prop.lawyerName}
-                        className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/20 group-hover:scale-105 transition-transform"
+                        name={prop.lawyerName}
+                        size="lg"
+                        className="group-hover:scale-105 transition-transform"
                       />
                       <div>
                         <h3 className="text-sm font-extrabold text-foreground group-hover:text-emerald-600 dark:text-emerald-400 transition-colors flex items-center gap-2 flex-wrap">

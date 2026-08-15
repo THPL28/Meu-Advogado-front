@@ -16,6 +16,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
+import { UserAvatar } from '../ui/UserAvatar';
 
 export const ClientPublicProfile: React.FC = () => {
   const {
@@ -70,17 +71,11 @@ export const ClientPublicProfile: React.FC = () => {
         <div className="px-6 sm:px-8 pb-8 pt-0 relative flex flex-col sm:flex-row items-start justify-between gap-6">
           
           <div className="flex flex-col sm:flex-row items-start gap-5">
-            {clientAvatar ? (
-              <img
-                src={clientAvatar}
-                alt={clientName}
-                className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover ring-4 ring-white shadow-md bg-card shrink-0 -mt-12 sm:-mt-14 z-10"
-              />
-            ) : (
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 flex items-center justify-center font-bold text-2xl ring-4 ring-white shadow-md bg-card shrink-0 -mt-12 sm:-mt-14 z-10">
-                {clientName ? clientName.slice(0, 2).toUpperCase() : 'CL'}
-              </div>
-            )}
+            <UserAvatar
+              src={clientAvatar}
+              name={clientName}
+              className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl ring-4 ring-white shadow-md bg-card shrink-0 -mt-12 sm:-mt-14 z-10 text-2xl font-bold"
+            />
 
             <div className="space-y-1.5 pt-2 sm:pt-4">
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -233,10 +228,10 @@ export const ClientPublicProfile: React.FC = () => {
                   <div key={rev.id} className="p-5 bg-background/80 border border-border/80 rounded-2xl space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <img
+                        <UserAvatar
                           src={rev.lawyerAvatar}
-                          alt={rev.lawyerName}
-                          className="w-10 h-10 rounded-xl object-cover ring-1 ring-border/50"
+                          name={rev.lawyerName}
+                          size="md"
                         />
                         <div>
                           <h4 className="text-xs font-bold text-foreground">{rev.lawyerName}</h4>

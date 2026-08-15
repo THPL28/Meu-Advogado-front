@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
   Filter,
@@ -342,10 +342,11 @@ export const FindLawyersPage: React.FC = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div className="relative shrink-0">
-                          <img
+                          <UserAvatar
                             src={lawyer.avatarUrl}
-                            alt={lawyer.name}
-                            className="w-14 h-14 rounded-2xl object-cover ring-2 ring-emerald-500/20 group-hover:scale-105 transition-transform"
+                            name={lawyer.name}
+                            size="xl"
+                            className="group-hover:scale-105 transition-transform"
                           />
                           <span
                             className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${

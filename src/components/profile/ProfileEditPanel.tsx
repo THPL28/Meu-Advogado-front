@@ -32,6 +32,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
+import { UserAvatar } from '../ui/UserAvatar';
 import {
   FullLawyerProfile,
   LawyerSpecialtyDetail,
@@ -129,13 +130,11 @@ export const ProfileEditPanel: React.FC = () => {
     return (
       <div className="space-y-6 animate-in fade-in duration-200 text-foreground w-full max-w-5xl mx-auto">
         <div className="bg-card rounded-3xl p-6 sm:p-8 border border-border/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-6">
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt={user?.name} className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl object-cover ring-2 ring-emerald-500/30" />
-          ) : (
-            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-3xl ring-2 ring-emerald-500/30">
-              {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
-            </div>
-          )}
+          <UserAvatar
+            src={user?.avatarUrl}
+            name={user?.name}
+            className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl ring-2 ring-emerald-500/30 text-3xl font-bold"
+          />
           <div className="flex-1 text-center sm:text-left">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
               <h1 className="text-2xl font-extrabold text-foreground">{user?.name}</h1>
@@ -791,7 +790,7 @@ export const ProfileEditPanel: React.FC = () => {
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">URL da Foto de Perfil / Avatar</label>
                     <div className="flex gap-3 items-center">
-                      <img src={formData.avatarUrl} alt="Avatar Preview" className="w-12 h-12 rounded-xl object-cover ring-2 ring-emerald-500/20" />
+                      <UserAvatar src={formData.avatarUrl} name={formData.name || 'Advogado'} size="lg" />
                       <input
                         type="text"
                         value={formData.avatarUrl}

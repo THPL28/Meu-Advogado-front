@@ -52,6 +52,8 @@ export const PaymentsPage: React.FC = () => {
     totalInvested: 0
   };
 
+  const clientContracts = contracts.filter(c => c.clientId === user?.id || role === 'CLIENT');
+
   const handleOpenContractDetails = (caseId: string) => {
     setSelectedCaseId(caseId);
     setActiveTab('case-detail');

@@ -158,7 +158,7 @@ const MainLayout: React.FC = () => {
           {activeTab === 'payments' && <PaymentsPage />}
           {activeTab === 'chat' && <ChatPage />}
           {activeTab === 'documents' && <DocumentsPage />}
-          {activeTab === 'profile' && <LawyerPublicProfile />}
+          {activeTab === 'profile' && (user?.role === 'CLIENT' ? <ClientPublicProfile /> : <LawyerPublicProfile />)}
           {activeTab === 'client-profile' && <ClientPublicProfile />}
           {activeTab === 'edit-profile' && <ProfileEditPanel />}
           {activeTab === 'subscription' && <SubscriptionPage />}

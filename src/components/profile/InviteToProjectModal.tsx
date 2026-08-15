@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Send, Briefcase, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
+import { UserAvatar } from '../ui/UserAvatar';
 
 export const InviteToProjectModal: React.FC = () => {
   const {
@@ -46,10 +47,10 @@ export const InviteToProjectModal: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-border/50">
           <div className="flex items-center gap-3">
-            <img
+            <UserAvatar
               src={selectedLawyerForInvite.avatarUrl}
-              alt={selectedLawyerForInvite.name}
-              className="w-11 h-11 rounded-xl object-cover ring-2 ring-emerald-500/30"
+              name={selectedLawyerForInvite.name}
+              size="lg"
             />
             <div>
               <div className="flex items-center gap-1.5">

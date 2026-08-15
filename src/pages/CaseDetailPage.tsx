@@ -32,6 +32,7 @@ import { useLegalPlatform } from '../hooks/useLegalPlatform';
 import { proposalsApi, contractsApi, documentsApi } from '../services/api';
 import { AcceptProposalModal } from '../components/proposals/AcceptProposalModal';
 import { Proposal, SecureDocument, ContractTimelineEvent } from '../types';
+import { UserAvatar } from '../components/ui/UserAvatar';
 
 const ExpandableText = ({ text, maxLength = 250 }: { text: string; maxLength?: number }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -358,11 +359,7 @@ export const CaseDetailPage: React.FC = () => {
                   onClick={() => openClientProfile(job.clientId)}
                   className="text-xs font-bold text-muted-foreground/90 hover:text-emerald-600 dark:text-emerald-400 flex items-center gap-2 cursor-pointer transition-colors"
                 >
-                  {job.clientAvatar ? (
-                    <img src={job.clientAvatar} alt={job.clientName} className="w-5 h-5 rounded-full object-cover" />
-                  ) : (
-                    <Building2 className="w-4 h-4 text-muted-foreground/90" />
-                  )}
+                  <UserAvatar src={job.clientAvatar} name={job.clientName} size="xs" />
                   <span>Cliente: <strong className="underline">{job.clientName}</strong> ({job.city}, {job.state})</span>
                 </button>
               ) : (
@@ -628,10 +625,10 @@ export const CaseDetailPage: React.FC = () => {
                       <div key={prop.id} className="p-5 bg-background/80 border border-border/80 rounded-2xl space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <img
+                            <UserAvatar
                               src={prop.lawyerAvatar}
-                              alt={prop.lawyerName}
-                              className="w-10 h-10 rounded-xl object-cover ring-1 ring-border/50"
+                              name={prop.lawyerName}
+                              size="md"
                             />
                             <div>
                               <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -1083,13 +1080,11 @@ export const CaseDetailPage: React.FC = () => {
                 onClick={() => openClientProfile(job.clientId)}
                 className="w-full flex items-center gap-3 p-3 bg-background hover:bg-emerald-50/50 border border-border/80 hover:border-emerald-300 rounded-2xl transition-all cursor-pointer text-left group"
               >
-                {job.clientAvatar ? (
-                  <img src={job.clientAvatar} alt={job.clientName} className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30 shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 rounded-2xl bg-muted/80 flex items-center justify-center font-bold text-muted-foreground/90 shrink-0">
-                    {job.clientName.charAt(0)}
-                  </div>
-                )}
+                <UserAvatar
+                  src={job.clientAvatar}
+                  name={job.clientName}
+                  size="lg"
+                />
                 <div className="space-y-0.5 min-w-0">
                   <p className="text-sm font-bold text-foreground group-hover:text-emerald-600 dark:text-emerald-400 transition-colors truncate">{job.clientName}</p>
                   <p className="text-xs text-muted-foreground/90 flex items-center gap-1">
@@ -1116,17 +1111,11 @@ export const CaseDetailPage: React.FC = () => {
             <div className="p-6 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
               <h3 className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">Advogado Responsável</h3>
               <div className="flex items-center gap-3">
-                {job.assignedLawyerAvatar ? (
-                  <img
-                    src={job.assignedLawyerAvatar}
-                    alt={job.assignedLawyerName}
-                    className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-sm ring-2 ring-emerald-500/30 shrink-0">
-                    {job.assignedLawyerName.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
+                <UserAvatar
+                  src={job.assignedLawyerAvatar}
+                  name={job.assignedLawyerName}
+                  size="lg"
+                />
                 <div>
                   <p className="text-sm font-bold text-foreground">{job.assignedLawyerName}</p>
                   <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">

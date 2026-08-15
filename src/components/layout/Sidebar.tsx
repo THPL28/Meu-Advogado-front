@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   LayoutDashboard,
   Briefcase,
@@ -81,7 +81,8 @@ export const Sidebar: React.FC = () => {
     setIsNewCaseModalOpen,
     setIsAiAssistantModalOpen,
     sidebarState,
-    toggleSidebar
+    toggleSidebar,
+    openClientProfile
   } = useLegalPlatform();
 
   const vBadge = getVerificationBadgeConfig(user?.verificationStatus || verificationStatus);
@@ -236,14 +237,20 @@ export const Sidebar: React.FC = () => {
       {/* Bottom Profile Badge & Security Verification Card */}
       <div className="p-3 border-t border-border/80 bg-background/50 shrink-0">
         <div
-          onClick={() => setActiveTab('profile')}
+          onClick={() => {
+            if (user?.role === 'CLIENT') {
+              openClientProfile(user?.id || '');
+            } else {
+              setActiveTab('profile');
+            }
+          }}
           className="p-2.5 bg-card border border-border/80 rounded-2xl space-y-2 shadow-xs cursor-pointer hover:border-emerald-400 transition-all"
         >
           <div className="flex items-center gap-2.5">
-            <img
+            <UserAvatar
               src={user?.avatarUrl}
-              alt={user?.name}
-              className="w-9 h-9 rounded-xl object-cover ring-1 ring-emerald-500/30 shrink-0"
+              name={user?.name}
+              size="md"
             />
             {!isCollapsed && (
               <div className="overflow-hidden min-w-0 flex-1">
@@ -255,10 +262,14 @@ export const Sidebar: React.FC = () => {
                       <span className="truncate">{vBadge.label}</span>
                     </span>
                   </div>
-                ) : (
+                ) : user?.verificationStatus === 'VERIFIED' ? (
                   <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span className="truncate">Cliente Corporativo</span>
+                    <span className="truncate">Cliente Verificado</span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-muted-foreground font-medium truncate">
+                    Cliente Corporativo
                   </div>
                 )}
               </div>

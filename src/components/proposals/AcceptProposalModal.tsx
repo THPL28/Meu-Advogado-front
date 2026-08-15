@@ -22,6 +22,7 @@ import {
 import { Proposal, Job, Contract, ConflictCheck, ConflictStatus } from '../../types';
 import { conflictsApi, contractsApi } from '../../services/api';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface AcceptProposalModalProps {
   isOpen: boolean;
@@ -244,13 +245,11 @@ export const AcceptProposalModal: React.FC<AcceptProposalModalProps> = ({
             {/* Candidate summary card */}
             <div className="p-4 bg-background rounded-2xl border border-border/60 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                {proposal.lawyerAvatar ? (
-                  <img src={proposal.lawyerAvatar} alt={proposal.lawyerName} className="w-10 h-10 rounded-xl object-cover ring-1 ring-border" />
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center font-bold text-muted-foreground text-sm">
-                    {proposal.lawyerName.charAt(0)}
-                  </div>
-                )}
+                <UserAvatar
+                  src={proposal.lawyerAvatar}
+                  name={proposal.lawyerName}
+                  size="md"
+                />
                 <div>
                   <p className="text-xs font-bold text-foreground">{proposal.lawyerName}</p>
                   <p className="text-[11px] text-muted-foreground">{proposal.lawyerOab || 'OAB Registrada'} • {proposal.deliveryDays} dias previstos</p>

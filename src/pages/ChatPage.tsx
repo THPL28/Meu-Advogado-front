@@ -21,6 +21,7 @@ import {
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
 import { ChatMessage, ChatConversation } from '../types';
 import { chatApi, proposalsApi } from '../services/api';
+import { UserAvatar } from '../components/ui/UserAvatar';
 
 export const ChatPage: React.FC = () => {
   const {
@@ -194,10 +195,10 @@ export const ChatPage: React.FC = () => {
                   }`}
                 >
                   <div className="relative shrink-0 mt-0.5">
-                    <img
+                    <UserAvatar
                       src={conv.otherUser.avatar}
-                      alt={conv.otherUser.name}
-                      className="w-11 h-11 rounded-2xl object-cover ring-2 ring-border/50/80"
+                      name={conv.otherUser.name}
+                      size="lg"
                     />
                     {conv.otherUser.isOnline && (
                       <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 ring-2 ring-white rounded-full" />
@@ -248,13 +249,17 @@ export const ChatPage: React.FC = () => {
                     <ArrowLeft className="w-5 h-5" />
                   </button>
 
-                  <img
-                    src={activeConv.otherUser.avatar}
-                    alt={activeConv.otherUser.name}
+                  <div
                     onClick={() => { if (activeConv.otherUser) openLawyerProfile(activeConv.otherUser.id || activeConv.otherUser.name); }}
-                    className="w-11 h-11 rounded-2xl object-cover ring-2 ring-emerald-500/30 cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+                    className="cursor-pointer hover:opacity-90 transition-opacity shrink-0"
                     title="Ver perfil completo"
-                  />
+                  >
+                    <UserAvatar
+                      src={activeConv.otherUser.avatar}
+                      name={activeConv.otherUser.name}
+                      size="lg"
+                    />
+                  </div>
 
                   <div className="min-w-0">
                     <h3
