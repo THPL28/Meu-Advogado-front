@@ -12,7 +12,8 @@ import {
   ArrowRight,
   Sparkles,
   Lock,
-  Key
+  Key,
+  FileCheck2
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
 

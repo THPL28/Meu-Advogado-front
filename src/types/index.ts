@@ -1,4 +1,4 @@
-﻿export type Role = 'LAWYER' | 'CLIENT' | 'ADMIN';
+export type Role = 'LAWYER' | 'CLIENT' | 'ADMIN';
 
 export type VerificationStatus = 'DRAFT' | 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'EXPIRED';
 
@@ -262,6 +262,7 @@ export interface UserProfile {
   skills: string[];
   hourlyRate?: number;
   fixedRateEstimate?: number;
+  experienceYears?: number;
   rating: number; // e.g., 4.9
   reviewCount: number;
   completedCasesCount: number;
@@ -272,6 +273,7 @@ export interface UserProfile {
   mfaEnabled?: boolean;
   city: string;
   state: string;
+  location?: string;
   joinedDate: string;
   companyName?: string;
   lawyerWallet?: LawyerWallet;

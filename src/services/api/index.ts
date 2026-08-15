@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ============================================================
  * LegaWork – API Service Layer (Connected to Production Backend)
  * ============================================================
@@ -741,6 +741,25 @@ export const authApi = {
       return updated;
     }
     throw new Error('Não autenticado');
+  },
+
+  async saveLawyerBankInfo(bankInfo: any): Promise<UserProfile> {
+    const current = await authApi.getCurrentUser();
+    if (!current) throw new Error('Não autenticado');
+    const updated: UserProfile = {
+      ...current,
+      lawyerWallet: {
+        ...(current.lawyerWallet || {
+          availableBalance: 0,
+          escrowBalance: 0,
+          internalBalance: 0,
+          totalEarned: 0,
+        }),
+        bankInfo,
+      },
+    };
+    setStorage('current_user', updated);
+    return updated;
   },
 };
 
