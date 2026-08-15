@@ -54,8 +54,24 @@ export const AcceptProposalModal: React.FC<AcceptProposalModalProps> = ({
   const [createdContract, setCreatedContract] = useState<Contract | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
 
+  const effectiveJob: Job = job || {
+    id: proposal?.jobId || 'job_1',
+    title: proposal?.jobTitle || 'Demanda Jurídica',
+    description: proposal?.coverLetter || 'Demanda jurídica.',
+    clientId: user?.id || 'client_1',
+    clientName: user?.name || 'Cliente',
+    budgetMax: proposal?.value || 1000,
+    budgetMin: proposal?.value || 1000,
+    status: 'OPEN',
+    urgency: 'HIGH',
+    confidentiality: 'STRICTLY_CONFIDENTIAL',
+    type: 'CONSULTING',
+    createdAt: proposal?.createdAt || new Date().toISOString(),
+    proposalsCount: 1,
+  };
+
   useEffect(() => {
-    if (isOpen && proposal && job) {
+    if (isOpen && proposal) {
       setStep(1);
       setTermsAccepted(false);
       setSignerName(user?.name || '');
@@ -67,22 +83,21 @@ export const AcceptProposalModal: React.FC<AcceptProposalModalProps> = ({
   }, [isOpen, proposal?.id, job?.id]);
 
   const checkConflictStatus = async () => {
-    if (!job || !proposal) return;
+    if (!proposal) return;
     setLoadingConflict(true);
     setConflictError(null);
     try {
-      // Check existing status or query check endpoint
-      let check = await conflictsApi.getConflictStatus(job.id, proposal.lawyerId);
+      const jId = effectiveJob.id;
+      let check = await conflictsApi.getConflictStatus(jId, proposal.lawyerId);
       if (!check) {
-        check = await conflictsApi.checkConflict(job.id, proposal.lawyerId);
+        check = await conflictsApi.checkConflict(jId, proposal.lawyerId);
       }
       setConflictCheck(check);
     } catch (err: any) {
       console.warn('Conflict check warning:', err);
-      // Default to CLEAR if no explicit block
       setConflictCheck({
-        id: `chk_${job.id}_${proposal.lawyerId}`,
-        jobId: job.id,
+        id: `chk_${effectiveJob.id}_${proposal.lawyerId}`,
+        jobId: effectiveJob.id,
         lawyerId: proposal.lawyerId,
         status: 'CLEAR',
         createdAt: new Date().toISOString(),
@@ -92,7 +107,7 @@ export const AcceptProposalModal: React.FC<AcceptProposalModalProps> = ({
     }
   };
 
-  if (!isOpen || !proposal || !job) return null;
+  if (!isOpen || !proposal) return null;
 
   const isBlocked = conflictCheck?.status === 'BLOCKED';
 
@@ -306,7 +321,7 @@ export const AcceptProposalModal: React.FC<AcceptProposalModalProps> = ({
               <div>
                 <strong className="text-foreground block">1. DAS PARTES CONTRATANTES</strong>
                 <p>
-                  <strong>CONTRATANTE:</strong> {user?.name || job.clientName || 'Cliente'} (identificado na plataforma).<br />
+                  <strong>CONTRATANTE:</strong> {user?.name || effectiveJob.clientName || 'Cliente'} (identificado na plataforma).<br />
                   <strong>CONTRATADO:</strong> {proposal.lawyerName}, inscrito(a) na {proposal.lawyerOab || 'Ordem dos Advogados do Brasil'}.
                 </p>
               </div>
@@ -314,7 +329,7 @@ export const AcceptProposalModal: React.FC<AcceptProposalModalProps> = ({
               <div>
                 <strong className="text-foreground block">2. DO OBJETO DO MANDATO</strong>
                 <p>
-                  Constitui objeto do presente instrumento a prestação de serviços advocatícios e assessoria jurídica referente à demanda: <strong>"{job.title}"</strong>, conforme especificações, prazos e estratégias detalhadas na proposta aceita.
+                  Constitui objeto do presente instrumento a prestação de serviços advocatícios e assessoria jurídica referente à demanda: <strong>"{effectiveJob.title}"</strong>, conforme especificações, prazos e estratégias detalhadas na proposta aceita.
                 </p>
               </div>
 
