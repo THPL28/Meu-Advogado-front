@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { X, CreditCard, CheckCircle2, DollarSign } from 'lucide-react';
+import { X, CreditCard, CheckCircle2, DollarSign, Wallet } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { paymentsApi } from '../../services/api';
 
 export const PayoutModal: React.FC = () => {
-  const { isPayoutModalOpen, setIsPayoutModalOpen, payments, refreshData, user } = useLegalPlatform();
+  const { isPayoutModalOpen, setIsPayoutModalOpen, refreshData, user } = useLegalPlatform();
 
+  const [payoutMethod, setPayoutMethod] = useState<'PIX' | 'PAYPAL'>('PIX');
   const [amount, setAmount] = useState('');
-  const [pixKey, setPixKey] = useState(user?.email || '');
+  const [pixKey, setPixKey] = useState(user?.lawyerWallet?.bankInfo?.pixKey || user?.email || '');
+  const [paypalEmail, setPaypalEmail] = useState(user?.lawyerWallet?.bankInfo?.paypalEmail || user?.email || '');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -17,7 +19,8 @@ export const PayoutModal: React.FC = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await paymentsApi.requestPayout(Number(amount), pixKey);
+      const destination = payoutMethod === 'PIX' ? pixKey : `PayPal (${paypalEmail})`;
+      await paymentsApi.requestPayout(Number(amount), destination);
       await refreshData();
       setSuccess(true);
       setTimeout(() => {
@@ -41,8 +44,8 @@ export const PayoutModal: React.FC = () => {
               <CreditCard className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-foreground">Solicitar Resgate PIX</h3>
-              <p className="text-xs text-muted-foreground/90">Transferência imediata do saldo disponível</p>
+              <h3 className="text-lg font-bold text-foreground">Solicitar Resgate de Saldo</h3>
+              <p className="text-xs text-muted-foreground/90">Transferência do saldo disponível para PIX ou PayPal</p>
             </div>
           </div>
           <button
@@ -56,12 +59,45 @@ export const PayoutModal: React.FC = () => {
         {success ? (
           <div className="p-8 text-center space-y-3">
             <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
-            <h4 className="text-lg font-bold text-foreground">Transferência Executada!</h4>
-            <p className="text-xs text-muted-foreground/90">O montante de R$ {Number(amount).toLocaleString('pt-BR')} foi transferido para {pixKey}.</p>
+            <h4 className="text-lg font-bold text-foreground">Solicitação Enviada com Sucesso!</h4>
+            <p className="text-xs text-muted-foreground/90">
+              O montante de R$ {Number(amount).toLocaleString('pt-BR')} será repassado para {payoutMethod === 'PIX' ? pixKey : paypalEmail}.
+            </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             
+            {/* Method Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Método de Resgate</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPayoutMethod('PIX')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    payoutMethod === 'PIX'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-muted text-muted-foreground border border-border'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  PIX Nacional
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayoutMethod('PAYPAL')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    payoutMethod === 'PAYPAL'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-muted text-muted-foreground border border-border'
+                  }`}
+                >
+                  <Wallet className="w-4 h-4" />
+                  PayPal
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Valor do Resgate (R$)</label>
               <div className="relative">
@@ -69,6 +105,8 @@ export const PayoutModal: React.FC = () => {
                 <input
                   type="number"
                   required
+                  min="1"
+                  step="0.01"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="w-full bg-background border border-border rounded-xl pl-10 pr-3 py-2.5 text-base font-mono font-bold text-emerald-600 dark:text-emerald-400 focus:bg-card focus:outline-none focus:border-emerald-600 transition-all"
@@ -79,21 +117,38 @@ export const PayoutModal: React.FC = () => {
               </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Chave PIX Cadastrada (CPF/CNPJ/Email)</label>
-              <input
-                type="text"
-                required
-                value={pixKey}
-                onChange={(e) => setPixKey(e.target.value)}
-                className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground/90 focus:bg-card focus:outline-none focus:border-emerald-600 transition-all"
-              />
-            </div>
+            {payoutMethod === 'PIX' ? (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Chave PIX (CPF/CNPJ/E-mail/Telefone)</label>
+                <input
+                  type="text"
+                  required
+                  value={pixKey}
+                  onChange={(e) => setPixKey(e.target.value)}
+                  className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground/90 focus:bg-card focus:outline-none focus:border-emerald-600 transition-all font-mono"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">E-mail da Carteira PayPal</label>
+                <input
+                  type="email"
+                  required
+                  value={paypalEmail}
+                  onChange={(e) => setPaypalEmail(e.target.value)}
+                  placeholder="seu-email@paypal.com"
+                  className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground/90 focus:bg-card focus:outline-none focus:border-emerald-600 transition-all font-mono"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  A administração efetuará o envio direto dos fundos para este endereço PayPal.
+                </p>
+              </div>
+            )}
 
             <div className="p-3.5 bg-background rounded-xl border border-border text-xs text-muted-foreground/90 space-y-1">
               <p className="font-semibold text-foreground">Informações da Operação:</p>
-              <p>• Liberação Instantânea via Banco Central (PIX)</p>
-              <p>• Isento de taxas administrativas para advogados parceiros</p>
+              <p>• PIX: Liberação instantânea no sistema</p>
+              <p>• PayPal: Repasse manual em até 24 horas úteis</p>
             </div>
 
             <div className="pt-4 border-t border-border/50 flex items-center justify-end gap-3">
@@ -109,7 +164,7 @@ export const PayoutModal: React.FC = () => {
                 disabled={submitting}
                 className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
               >
-                {submitting ? 'Transferindo...' : 'Confirmar Resgate PIX'}
+                {submitting ? 'Transferindo...' : `Confirmar Resgate via ${payoutMethod}`}
               </button>
             </div>
 

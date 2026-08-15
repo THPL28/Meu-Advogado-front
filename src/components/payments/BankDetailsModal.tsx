@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Building2, CheckCircle2, ShieldCheck, Key } from 'lucide-react';
+import { X, Building2, CheckCircle2, ShieldCheck, Key, Wallet } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 
 export const BankDetailsModal: React.FC = () => {
@@ -13,6 +13,7 @@ export const BankDetailsModal: React.FC = () => {
   const [accountType, setAccountType] = useState<any>(bankInfo?.accountType || 'CORRENTE');
   const [agency, setAgency] = useState(bankInfo?.agency || '');
   const [accountNumber, setAccountNumber] = useState(bankInfo?.accountNumber || '');
+  const [paypalEmail, setPaypalEmail] = useState(bankInfo?.paypalEmail || user?.email || '');
 
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -29,7 +30,8 @@ export const BankDetailsModal: React.FC = () => {
         bankName,
         accountType,
         agency,
-        accountNumber
+        accountNumber,
+        paypalEmail
       });
       setSuccess(true);
       setTimeout(() => {
@@ -54,8 +56,8 @@ export const BankDetailsModal: React.FC = () => {
               <Building2 className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-foreground">Cadastrar Dados Bancários para Recebimento</h3>
-              <p className="text-[11px] text-muted-foreground/90">Chave PIX e conta corrente do advogado responsável</p>
+              <h3 className="text-base font-extrabold text-foreground">Cadastrar Dados para Recebimento</h3>
+              <p className="text-[11px] text-muted-foreground/90">Chave PIX, conta bancária e carteira PayPal</p>
             </div>
           </div>
           <button
@@ -70,7 +72,7 @@ export const BankDetailsModal: React.FC = () => {
           <div className="p-8 text-center space-y-3">
             <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
             <h4 className="text-lg font-bold text-foreground">Dados Atualizados com Sucesso!</h4>
-            <p className="text-xs text-muted-foreground/90">Seus saques PIX serão direcionados para esta chave cadastrada.</p>
+            <p className="text-xs text-muted-foreground/90">Seus repasses e saques serão direcionados para as informações cadastradas.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -110,10 +112,31 @@ export const BankDetailsModal: React.FC = () => {
               </div>
             </div>
 
+            {/* PayPal Wallet Section */}
+            <div className="p-3.5 bg-background border border-border rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-foreground/90 uppercase tracking-wider">
+                <Wallet className="w-4 h-4 text-emerald-600" />
+                <span>Carteira PayPal (Recebimento Internacional)</span>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">E-mail da Conta PayPal</label>
+                <input
+                  type="email"
+                  value={paypalEmail}
+                  onChange={(e) => setPaypalEmail(e.target.value)}
+                  placeholder="seu-email@paypal.com"
+                  className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground/90 focus:outline-none focus:border-emerald-600 font-mono"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Os repasses internacionais serão efetuados diretamente para este e-mail PayPal pela administração.
+                </p>
+              </div>
+            </div>
+
             {/* Bank Details Section */}
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Instituição Bancária</label>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Instituição Bancária (Opcional)</label>
                 <select
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
@@ -146,7 +169,6 @@ export const BankDetailsModal: React.FC = () => {
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Agência</label>
                   <input
                     type="text"
-                    required
                     value={agency}
                     onChange={(e) => setAgency(e.target.value)}
                     placeholder="0001"
@@ -157,7 +179,6 @@ export const BankDetailsModal: React.FC = () => {
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Número da Conta</label>
                   <input
                     type="text"
-                    required
                     value={accountNumber}
                     onChange={(e) => setAccountNumber(e.target.value)}
                     placeholder="12345-6"
@@ -185,7 +206,7 @@ export const BankDetailsModal: React.FC = () => {
                 disabled={submitting}
                 className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
               >
-                {submitting ? 'Salvando...' : 'Salvar Dados Bancários'}
+                {submitting ? 'Salvando...' : 'Salvar Dados de Recebimento'}
               </button>
             </div>
 

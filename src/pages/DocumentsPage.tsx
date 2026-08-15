@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   FolderOpen,
   FileText,
@@ -12,6 +12,7 @@ import {
   Folder
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
+import { documentsApi } from '../services/api';
 
 export const DocumentsPage: React.FC = () => {
   const { documents, setIsUploadDocModalOpen } = useLegalPlatform();
@@ -203,7 +204,17 @@ export const DocumentsPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-4 px-3 text-right">
-                      <button className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await documentsApi.downloadSecureDocument(doc.id, doc.fileName);
+                          } catch (e) {
+                            console.error('Download failed:', e);
+                          }
+                        }}
+                        title="Baixar documento assinado com hash SHA-256"
+                        className="p-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors cursor-pointer"
+                      >
                         <Download className="w-4 h-4" />
                       </button>
                     </td>

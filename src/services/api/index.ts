@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * LegaWork – API Service Layer (Connected to Production Backend)
  * ============================================================
@@ -1688,7 +1688,31 @@ export const documentsApi = {
   },
 
   async getDocuments(_category?: string): Promise<AppDocument[]> {
-    return [];
+    try {
+      const data = await http<any[]>('/api/documents/secure/my');
+      const secureDocs = (Array.isArray(data) ? data : []).map(mapBackendSecureDocument);
+      return secureDocs.map((doc) => {
+        const sizeMb = doc.fileSize ? (doc.fileSize / (1024 * 1024)).toFixed(2) + ' MB' : '1.0 MB';
+        const ext = doc.fileName.split('.').pop()?.toUpperCase() || 'PDF';
+        const fileType = (ext === 'DOCX' || ext === 'XLSX' || ext === 'ZIP') ? ext : 'PDF';
+        return {
+          id: String(doc.id),
+          title: doc.fileName.replace(/\.[^/.]+$/, ''),
+          processNumber: undefined,
+          category: (doc.classification === 'RESTRICTED' ? 'Contratos' : 'PeÃ§as Processuais') as any,
+          fileName: doc.fileName,
+          fileSize: sizeMb,
+          fileType: fileType as any,
+          uploadedBy: doc.ownerName || 'VocÃª',
+          uploadDate: doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+          statusTag: (doc.virusScanStatus === 'CLEAN' ? 'Finalizado' : 'Em revisÃ£o') as any,
+          downloadUrl: `/api/documents/secure/${doc.id}/download`,
+        };
+      });
+    } catch (e) {
+      console.warn('Documents fetch error:', e);
+      return [];
+    }
   },
 
   async uploadDocument(docData: Partial<AppDocument>): Promise<AppDocument> {

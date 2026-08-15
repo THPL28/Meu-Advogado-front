@@ -1,4 +1,4 @@
-export type Role = 'LAWYER' | 'CLIENT' | 'ADMIN';
+﻿export type Role = 'LAWYER' | 'CLIENT' | 'ADMIN';
 
 export type VerificationStatus = 'DRAFT' | 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'EXPIRED';
 
@@ -227,6 +227,7 @@ export interface LawyerBankInfo {
   accountType: 'CORRENTE' | 'POUPANCA';
   agency: string;
   accountNumber: string;
+  paypalEmail?: string;
 }
 
 export interface LawyerWallet {

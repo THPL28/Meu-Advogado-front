@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   Scale,
   Search,
@@ -82,7 +82,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     user,
     role,
     verificationStatus,
-    switchRole,
     activeTab,
     setActiveTab,
     notifications,
@@ -235,29 +234,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Role Switcher Toggle Badge */}
-          <div className="hidden lg:flex items-center bg-muted p-1 rounded-xl border border-border">
-            <button
-              onClick={() => switchRole('LAWYER')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                role === 'LAWYER'
-                  ? 'bg-card text-foreground shadow-xs border border-border/80'
-                  : 'text-muted-foreground/90 hover:text-foreground'
-              }`}
-            >
-              Advogado
-            </button>
-            <button
-              onClick={() => switchRole('CLIENT')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                role === 'CLIENT'
-                  ? 'bg-card text-foreground shadow-xs border border-border/80'
-                  : 'text-muted-foreground/90 hover:text-foreground'
-              }`}
-            >
-              Cliente
-            </button>
-          </div>
+
 
           {/* Notification Bell */}
           <div className="relative">
@@ -348,12 +325,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </span>
                       )}
                     </div>
-                  ) : (
+                  ) : user?.verificationStatus === 'VERIFIED' ? (
                     <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Cliente Verificado
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="space-y-1">
@@ -449,32 +426,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               />
             </div>
 
-            {/* Mobile Role Switcher */}
-            <div className="p-3 bg-background rounded-2xl border border-border space-y-2">
-              <p className="text-[11px] uppercase font-bold text-muted-foreground/90">Perfil Ativo na Plataforma</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => switchRole('LAWYER')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-                    role === 'LAWYER'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-card text-muted-foreground border border-border'
-                  }`}
-                >
-                  Advogado
-                </button>
-                <button
-                  onClick={() => switchRole('CLIENT')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-                    role === 'CLIENT'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-card text-muted-foreground border border-border'
-                  }`}
-                >
-                  Cliente
-                </button>
-              </div>
-            </div>
+
 
             {/* Mobile Navigation Links */}
             <div className="space-y-1">

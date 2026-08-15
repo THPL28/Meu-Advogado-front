@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   Briefcase,
   Search,
@@ -43,7 +43,7 @@ export const CasesPage: React.FC = () => {
 
   // Filter lawyer active & completed cases (assigned contracts)
   const lawyerContracts = role === 'LAWYER' && user
-    ? contracts.filter(c => c.lawyerId === user.id || c.lawyerOab === user.oabNumber || true) // fallback show contracts
+    ? contracts.filter(c => c.lawyerId === user.id || c.lawyerOab === user.oabNumber)
     : contracts;
 
   const filteredLawyerCases = lawyerContracts.filter(c => {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   Job,
   Proposal,
@@ -338,8 +338,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const token = getStoredToken();
       const hasActiveSession = user !== null || Boolean(token);
       if (hasActiveSession) {
+        // Clients fetch only THEIR jobs (data isolation). Lawyers get all open jobs for discovery.
+        const isLawyer = user?.role === 'LAWYER';
         const [j, p, c, pay, d, n, m] = await Promise.all([
-          jobsApi.getJobs().catch(() => []),
+          (isLawyer ? jobsApi.getJobs() : jobsApi.getMyJobs()).catch(() => []),
           proposalsApi.getProposals().catch(() => []),
           contractsApi.getContracts().catch(() => []),
           paymentsApi.getPayments().catch(() => []),
