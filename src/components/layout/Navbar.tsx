@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Scale,
   Search,
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { ActiveTab } from '../../context/PlatformContext';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface NavbarProps {
   isMobileMenuOpen?: boolean;
