@@ -1403,9 +1403,89 @@ export function moderateContent(text: string, isNegotiation: boolean): { content
 }
 
 // ─────────────────────────────────────────────
-// SECTION 10 – CHAT API
+// SECTION 9.5 – PRESENCE API (Online status heartbeat)
 // ─────────────────────────────────────────────
+const PRESENCE_KEY = 'lwork_presence';
+const PRESENCE_TTL_MS = 30_000; // 30s — if no heartbeat, user is offline
+
+export const presenceApi = {
+  /** Call every 10s while user is active on the page */
+  heartbeat(): void {
+    try {
+      const ts = Date.now().toString();
+      sessionStorage.setItem(PRESENCE_KEY, ts);
+      // Also persist across tabs via localStorage
+      localStorage.setItem(PRESENCE_KEY, ts);
+    } catch {}
+  },
+
+  /** Check if THIS browser session is still "active" (last heartbeat < 30s ago) */
+  isSelfOnline(): boolean {
+    try {
+      const ts = Number(localStorage.getItem(PRESENCE_KEY) || '0');
+      return Date.now() - ts < PRESENCE_TTL_MS;
+    } catch { return false; }
+  },
+
+  /**
+   * Best-effort check: if the OTHER user has their presence key updated recently.
+   * Since we can't read another browser's sessionStorage, we use a backend notification
+   * fallback: we consider them "online" if they sent a message in the last 60s.
+   */
+  isOtherOnline(lastMessageRaw?: string): boolean {
+    if (!lastMessageRaw) return false;
+    try {
+      const msgTime = new Date(lastMessageRaw).getTime();
+      return Date.now() - msgTime < 60_000;
+    } catch { return false; }
+  },
+};
+
+// ─────────────────────────────────────────────
+// SECTION 10 – CHAT API (Real-time polling)
+// ─────────────────────────────────────────────
+
+/** Shared map: convId → lastKnownMessageId (for incremental polling) */
+const _lastMsgId: Record<string, string> = {};
+
+/** Format ISO timestamp to HH:mm */
+function fmtTime(iso: string): string {
+  try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+  catch { return ''; }
+}
+
+/** Format ISO date to "Hoje", "Ontem" or "DD/MM" */
+export function fmtChatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Hoje';
+    if (d.toDateString() === yesterday.toDateString()) return 'Ontem';
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  } catch { return ''; }
+}
+
+function rawToChatMsg(m: any, conversationId: string): ChatMessage {
+  const iso = m.sentAt || m.createdAt || m.timestamp || new Date().toISOString();
+  return {
+    id: String(m.messageId ?? m.id ?? ''),
+    conversationId,
+    senderId: String(m.senderId ?? ''),
+    senderName: m.senderName || 'Participante',
+    senderAvatar: m.senderAvatar || '',
+    content: m.contentMasked || m.message || m.content || '',
+    rawTimestamp: iso,
+    timestamp: fmtTime(iso),
+    isRead: Boolean(m.isRead ?? true),
+    isDelivered: true,
+    isReadByOther: Boolean(m.isReadByOther ?? false),
+    wasModerated: Boolean(m.isModerated ?? m.wasModerated ?? false),
+  };
+}
+
 export const chatApi = {
+  // ── Build conversation list (contracts + proposals) ──────────────
   async getConversations(): Promise<ChatConversation[]> {
     try {
       const currentUser = await authApi.getCurrentUser();
@@ -1418,7 +1498,7 @@ export const chatApi = {
 
       const convList: ChatConversation[] = [];
 
-      // 1. Contract conversations (Active execution)
+      // 1. Contract conversations (active execution)
       contracts.forEach((c) => {
         const isClient = String(c.clientId) === String(currentUser.id);
         convList.push({
@@ -1434,21 +1514,20 @@ export const chatApi = {
             oabOrCompany: isClient ? c.lawyerOab : undefined,
             isOnline: false,
           },
-          lastMessage: 'Mandato formalizado e sincronizado.',
+          lastMessage: 'Mandato em execução.',
           lastMessageTime: '',
           unreadCount: 0,
         });
       });
 
-      // 2. Pre-contractual proposals / negotiation threads
+      // 2. Pre-contractual negotiation threads (proposals)
       proposals.forEach((p) => {
         const isClient = currentUser.role === 'CLIENT';
-        const convId = `conv_prop_${p.id}`;
-        // Avoid duplicate if already covered by contract
         const alreadyInContract = contracts.some((c) => String(c.jobId) === String(p.jobId));
         if (!alreadyInContract) {
+          const iso = p.createdAt || new Date().toISOString();
           convList.push({
-            id: convId,
+            id: `conv_prop_${p.id}`,
             jobId: String(p.jobId),
             jobTitle: `Negociação: ${p.jobTitle || 'Demanda'}`,
             proposalId: String(p.id),
@@ -1457,15 +1536,16 @@ export const chatApi = {
             clientName: isClient ? currentUser.name : (p.clientName || 'Cliente'),
             state: 'NEGOCIACAO',
             otherUser: {
-              id: isClient ? (p.lawyerId || '') : (currentUser.id || ''),
+              id: isClient ? (p.lawyerId || '') : (p.clientId || ''),
               name: isClient ? (p.lawyerName || 'Advogado') : (p.clientName || 'Cliente'),
               avatar: isClient ? (p.lawyerAvatar || '') : '',
               role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
               oabOrCompany: isClient ? p.lawyerOab : undefined,
               isOnline: false,
             },
-            lastMessage: `Proposta enviada: R$ ${(p.value || 0).toLocaleString('pt-BR')}`,
-            lastMessageTime: p.createdAt ? new Date(p.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+            lastMessage: `Proposta: R$ ${(p.value || 0).toLocaleString('pt-BR')}`,
+            lastMessageTime: fmtTime(iso),
+            lastMessageRaw: iso,
             unreadCount: 0,
           });
         }
@@ -1478,6 +1558,7 @@ export const chatApi = {
     }
   },
 
+  // ── Fetch ALL messages for a conversation (initial load) ──────────
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
     if (!conversationId) return [];
 
@@ -1485,18 +1566,10 @@ export const chatApi = {
       const proposalId = conversationId.replace('conv_prop_', '');
       try {
         const res = await negotiationsApi.getMessages(proposalId);
-        const list = Array.isArray(res) ? res : (res as any)?.content || [];
-        return list.map((m: any) => ({
-          id: String(m.id || ''),
-          conversationId,
-          senderId: String(m.senderId || ''),
-          senderName: m.senderName || 'Participante',
-          senderAvatar: '',
-          content: m.contentMasked || m.content || m.message || '',
-          timestamp: m.sentAt ? new Date(m.sentAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-          isRead: true,
-          wasModerated: Boolean(m.isModerated),
-        }));
+        const list = Array.isArray(res) ? res : ((res as any)?.content || []);
+        const msgs = list.map((m: any) => rawToChatMsg(m, conversationId));
+        if (msgs.length > 0) _lastMsgId[conversationId] = msgs[msgs.length - 1].id;
+        return msgs;
       } catch (e) {
         console.warn('Negotiation messages fetch error:', e);
         return [];
@@ -1508,16 +1581,9 @@ export const chatApi = {
         const contractId = conversationId.replace('conv_contract_', '');
         const res = await http<any>(`/api/chat/messages/${contractId}`);
         const list = Array.isArray(res) ? res : (res?.messages || res?.content || []);
-        return list.map((m: any) => ({
-          id: String(m.messageId ?? m.id ?? ''),
-          conversationId,
-          senderId: String(m.senderId ?? ''),
-          senderName: m.senderName || 'Participante',
-          senderAvatar: '',
-          content: m.message || m.content || '',
-          timestamp: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-          isRead: Boolean(m.isRead),
-        }));
+        const msgs = list.map((m: any) => rawToChatMsg(m, conversationId));
+        if (msgs.length > 0) _lastMsgId[conversationId] = msgs[msgs.length - 1].id;
+        return msgs;
       } catch (e) {
         console.warn('Contract messages fetch error:', e);
         return [];
@@ -1527,14 +1593,52 @@ export const chatApi = {
     return [];
   },
 
-  async sendMessage(conversationId: string, content: string, attachments?: { name: string; size: string; type: 'PDF' | 'DOCX' | 'XLSX' | 'PNG' | 'JPG' }[]): Promise<ChatMessage> {
+  // ── Poll for NEW messages only (since lastKnownId) ──────────────
+  async pollNewMessages(conversationId: string, currentMessages: ChatMessage[]): Promise<ChatMessage[]> {
+    if (!conversationId) return [];
+    const allMessages = await chatApi.getMessages(conversationId);
+    if (currentMessages.length === 0) return allMessages;
+    const lastKnownId = currentMessages[currentMessages.length - 1]?.id;
+    if (!lastKnownId) return allMessages;
+    // Return only messages that are newer (appear after lastKnownId)
+    const lastKnownIdx = allMessages.findIndex((m) => m.id === lastKnownId);
+    if (lastKnownIdx === -1) {
+      // If we can't find the last known message, check if there are more total messages
+      if (allMessages.length > currentMessages.length) {
+        return allMessages.slice(currentMessages.length);
+      }
+      return [];
+    }
+    return allMessages.slice(lastKnownIdx + 1);
+  },
+
+  // ── Send message with optimistic UI support ──────────────────────
+  async sendMessage(
+    conversationId: string,
+    content: string,
+    attachments?: { name: string; size: string; type: 'PDF' | 'DOCX' | 'XLSX' | 'PNG' | 'JPG' }[],
+    otherUserId?: string,
+    otherUserIsOnline?: boolean,
+  ): Promise<ChatMessage> {
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
-    const { content: processedContent, wasModerated } = moderateContent(content, conversationId.startsWith('conv_prop_'));
 
-    if (conversationId.startsWith('conv_prop_')) {
+    const isNegotiation = conversationId.startsWith('conv_prop_');
+    const { content: processedContent, wasModerated } = moderateContent(content, isNegotiation);
+
+    const msgId = 'msg_' + Date.now();
+    const iso = new Date().toISOString();
+
+    if (isNegotiation) {
       const proposalId = conversationId.replace('conv_prop_', '');
-      await negotiationsApi.sendMessage(proposalId, processedContent).catch((e) => console.warn('Negotiation send error:', e));
+      const sent = await negotiationsApi.sendMessage(proposalId, processedContent).catch((e) => {
+        console.warn('Negotiation send error:', e);
+        return null;
+      });
+      // Use server-assigned ID if available
+      if (sent?.id) {
+        _lastMsgId[conversationId] = String(sent.id);
+      }
     } else if (conversationId.startsWith('conv_contract_')) {
       const contractId = conversationId.replace('conv_contract_', '');
       await http(`/api/chat/send/${contractId}`, {
@@ -1543,26 +1647,45 @@ export const chatApi = {
       }).catch((e) => console.warn('Chat send error:', e));
     }
 
-    return {
-      id: 'msg_' + Date.now(),
+    // Smart notification: only notify other user if they are NOT currently in this chat
+    if (!otherUserIsOnline && otherUserId) {
+      notificationsApi.createForOtherUser(otherUserId, currentUser.name, conversationId).catch(() => {});
+    }
+
+    const result: ChatMessage = {
+      id: msgId,
       conversationId,
       senderId: currentUser.id,
       senderName: currentUser.name,
       senderAvatar: currentUser.avatarUrl || '',
       content: processedContent,
+      rawTimestamp: iso,
+      timestamp: fmtTime(iso),
       wasModerated,
-      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       isRead: true,
-      attachments: attachments?.map((a, i) => ({ id: `att_${Date.now()}_${i}`, name: a.name, size: a.size, type: a.type, url: '#' })),
+      isDelivered: true,
+      isReadByOther: false,
+      attachments: attachments?.map((a, i) => ({
+        id: `att_${Date.now()}_${i}`,
+        name: a.name,
+        size: a.size,
+        type: a.type,
+        url: '#',
+      })),
     };
+
+    _lastMsgId[conversationId] = msgId;
+    return result;
   },
 
+  // ── Build negotiation conv on-the-fly ───────────────────────────
   async getOrCreateNegotiationChat(proposalId: string): Promise<ChatConversation> {
     const proposals = await proposalsApi.getProposals();
     const prop = proposals.find((p) => String(p.id) === String(proposalId));
     const currentUser = await authApi.getCurrentUser();
     if (!currentUser) throw new Error('Não autenticado');
     const isClient = currentUser.role === 'CLIENT';
+    const iso = prop?.createdAt || new Date().toISOString();
 
     return {
       id: 'conv_prop_' + proposalId,
@@ -1574,15 +1697,16 @@ export const chatApi = {
       clientName: isClient ? currentUser.name : (prop?.clientName || 'Cliente'),
       state: 'NEGOCIACAO',
       otherUser: {
-        id: isClient ? (prop?.lawyerId || '') : (currentUser.id || ''),
+        id: isClient ? (prop?.lawyerId || '') : (prop?.clientId || ''),
         name: isClient ? (prop?.lawyerName || 'Advogado') : (prop?.clientName || 'Cliente'),
         avatar: isClient ? (prop?.lawyerAvatar || '') : '',
         role: (isClient ? 'LAWYER' : 'CLIENT') as Role,
         oabOrCompany: isClient ? prop?.lawyerOab : undefined,
         isOnline: false,
       },
-      lastMessage: `Proposta enviada: R$ ${(prop?.value || 0).toLocaleString('pt-BR')}`,
-      lastMessageTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      lastMessage: `Proposta: R$ ${(prop?.value || 0).toLocaleString('pt-BR')}`,
+      lastMessageTime: fmtTime(iso),
+      lastMessageRaw: iso,
       unreadCount: 0,
     };
   },
@@ -1879,6 +2003,27 @@ export const notificationsApi = {
 
   async markAllAsRead(): Promise<void> {
     await http('/api/notifications/read-all', { method: 'POST' }).catch(() => {});
+  },
+
+  /**
+   * Create a notification for the OTHER user when they are offline/not in the chat.
+   * This is a best-effort call — failures are silently ignored.
+   */
+  async createForOtherUser(recipientUserId: string, senderName: string, conversationId: string): Promise<void> {
+    try {
+      await http('/api/notifications/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          recipientUserId: Number(recipientUserId),
+          title: `Nova mensagem de ${senderName}`,
+          message: `${senderName} enviou uma mensagem para você na plataforma LWork.`,
+          type: 'CHAT_MESSAGE',
+          referenceId: conversationId,
+        }),
+      });
+    } catch {
+      // Fallback: silently fail — the user will see the message when they open the chat
+    }
   },
 };
 

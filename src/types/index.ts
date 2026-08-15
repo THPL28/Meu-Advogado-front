@@ -614,9 +614,14 @@ export interface ChatMessage {
   senderAvatar: string;
   content: string;
   timestamp: string;
+  rawTimestamp?: string; // ISO string for sorting/comparison
   isRead: boolean;
+  isDelivered?: boolean;     // message reached server
+  isReadByOther?: boolean;   // other user has read it
   wasModerated?: boolean;
   attachments?: ChatAttachment[];
+  isSending?: boolean;       // optimistic UI state
+  sendFailed?: boolean;      // failed to send
 }
 
 export interface ChatConversation {
@@ -635,10 +640,13 @@ export interface ChatConversation {
     role: Role;
     oabOrCompany?: string;
     isOnline: boolean;
+    lastSeenAt?: number;   // epoch ms — for presence detection
   };
   lastMessage: string;
   lastMessageTime: string;
+  lastMessageRaw?: string; // ISO for comparison
   unreadCount: number;
+  lastReadMessageId?: string; // last msg id read by current user
 }
 
 export interface AppDocument {
