@@ -96,6 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   } = useLegalPlatform();
 
   const vBadge = getVerificationBadgeConfig(user?.verificationStatus || verificationStatus);
+  const BadgeIcon = vBadge.icon;
 
   const [internalMobileMenuOpen, setInternalMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -229,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${vBadge.className}`}
               title="Clique para gerenciar sua verificação cadastral"
             >
-              <vBadge.icon className="w-3.5 h-3.5" />
+              <BadgeIcon className="w-3.5 h-3.5" />
               <span>{vBadge.label}</span>
             </button>
           )}
@@ -310,7 +311,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {role === 'LAWYER' ? (
                     <div className="mt-2 flex items-center justify-between gap-1 flex-wrap">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${vBadge.className}`}>
-                        <vBadge.icon className="w-3 h-3" />
+                        <BadgeIcon className="w-3 h-3" />
                         {vBadge.label}
                       </span>
                       {user?.oabNumber && (
@@ -470,7 +471,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {role === 'LAWYER' && (
                     <div className="mt-1">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${vBadge.className}`}>
-                        <vBadge.icon className="w-3 h-3" />
+                        <BadgeIcon className="w-3 h-3" />
                         {vBadge.label}
                       </span>
                     </div>

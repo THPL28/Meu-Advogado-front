@@ -85,6 +85,7 @@ export const Sidebar: React.FC = () => {
   } = useLegalPlatform();
 
   const vBadge = getVerificationBadgeConfig(user?.verificationStatus || verificationStatus);
+  const BadgeIcon = vBadge.icon;
 
   if (sidebarState === 'hidden') return null;
 
@@ -250,7 +251,7 @@ export const Sidebar: React.FC = () => {
                 {user?.role === 'LAWYER' ? (
                   <div className="flex items-center gap-1 text-[11px] font-semibold truncate mt-0.5">
                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${vBadge.className}`}>
-                      <vBadge.icon className="w-3 h-3 shrink-0" />
+                      <BadgeIcon className="w-3 h-3 shrink-0" />
                       <span className="truncate">{vBadge.label}</span>
                     </span>
                   </div>

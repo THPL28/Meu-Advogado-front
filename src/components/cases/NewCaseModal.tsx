@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Scale,
@@ -106,15 +106,17 @@ export const NewCaseModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Content Moderation Notice */}
-        <div className="mt-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-1.5 text-xs">
-          <div className="flex items-center gap-2 font-bold">
-            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Regras de Moderação Automática & Proteção de Dados (Fase 2)</span>
+        {/* Content Moderation Tip (Clean, Enterprise Styling) */}
+        <div className="mt-4 p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-emerald-950 dark:text-emerald-100">Dica de Privacidade & Sigilo</p>
+              <p className="text-emerald-800/90 dark:text-emerald-300/90 text-[11px] mt-0.5 leading-relaxed">
+                Para sua segurança, descreva o objeto e necessidades do caso sem divulgar dados de contato ou documentos confidenciais. A troca segura de arquivos e contatos é liberada na contratação.
+              </p>
+            </div>
           </div>
-          <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-            Para garantir a privacidade e conformidade da plataforma, <strong>não inclua</strong> números de processos CNJ, CPF/CNPJ, telefones, e-mails ou links externos no título ou na descrição pública. Casos com dados de contato serão recusados automaticamente pelo motor de moderação (HTTP 422).
-          </p>
         </div>
 
         {errorMessage && (

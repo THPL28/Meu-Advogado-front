@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   CreditCard,
   ArrowUpRight,
@@ -64,17 +64,12 @@ export const PaymentsPage: React.FC = () => {
         {/* Client Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border/80">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wider">
-                Área Financeira do Cliente
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-3 mt-1">
-              <Wallet className="w-8 h-8 text-emerald-600" />
-              Carteira Digital do Cliente
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-3">
+              <Wallet className="w-7 h-7 text-emerald-600" />
+              Carteira Digital
             </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground/90 mt-1">
-              Gerencie seus fundos, depósitos em custódia (Escrow) e histórico de pagamentos aos advogados.
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Gestão de saldos, depósitos em garantia e extrato consolidado de transações.
             </p>
           </div>
 
@@ -94,48 +89,46 @@ export const PaymentsPage: React.FC = () => {
           
           <div className="p-6 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-2 shadow-xs relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-muted-foreground/90 uppercase tracking-wider">Saldo da Carteira Digital</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Saldo da Carteira Digital</p>
               <Wallet className="w-4 h-4 text-emerald-600" />
             </div>
             <p className="text-2xl lg:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tracking-tight">
               R$ {clientWallet.walletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-muted-foreground/90">Saldo livre para contratações rápidas</p>
+            <p className="text-xs text-muted-foreground">Saldo livre para contratações rápidas</p>
           </div>
 
           <div className="p-6 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-2 shadow-xs">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-muted-foreground/90 uppercase tracking-wider">Retido em Custódia (Escrow)</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Retido em Custódia (Escrow)</p>
               <Lock className="w-4 h-4 text-amber-600" />
             </div>
             <p className="text-2xl lg:text-3xl font-extrabold text-amber-600 dark:text-amber-400 font-mono tracking-tight">
               R$ {clientWallet.escrowBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-muted-foreground/90">Garantia bloqueada de projetos ativos</p>
+            <p className="text-xs text-muted-foreground">Garantia bloqueada de projetos ativos</p>
           </div>
 
           <div className="p-6 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-2 shadow-xs">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-muted-foreground/90 uppercase tracking-wider">Total Investido na Plataforma</p>
-              <CheckCircle2 className="w-4 h-4 text-muted-foreground/90" />
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Investido na Plataforma</p>
+              <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
             </div>
             <p className="text-2xl lg:text-3xl font-extrabold text-foreground font-mono tracking-tight">
               R$ {clientWallet.totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-muted-foreground/90">Total pago por serviços concluídos</p>
+            <p className="text-xs text-muted-foreground">Total pago por serviços concluídos</p>
           </div>
 
-          <div className="p-6 bg-emerald-50 border border-emerald-200/80 rounded-2xl sm:rounded-3xl space-y-2 shadow-xs">
+          <div className="p-6 bg-card border border-border/80 rounded-2xl sm:rounded-3xl space-y-2 shadow-xs">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Proteção da Garantia Escrow</p>
-              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Contratos em Andamento</p>
+              <FileCheck2 className="w-4 h-4 text-emerald-600" />
             </div>
-            <p className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-              100% Protegido
+            <p className="text-2xl lg:text-3xl font-extrabold text-foreground font-mono tracking-tight">
+              {clientContracts.filter(c => c.status === 'ACTIVE').length}
             </p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400">
-              Seu dinheiro só é liberado ao advogado após você aprovar a entrega de cada marco.
-            </p>
+            <p className="text-xs text-muted-foreground">Projetos com custódia garantida</p>
           </div>
 
         </div>
