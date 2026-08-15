@@ -1406,20 +1406,22 @@ export function moderateContent(text: string, isNegotiation: boolean): { content
 // SECTION 9.5 – PRESENCE API (Online status heartbeat)
 // ─────────────────────────────────────────────
 const PRESENCE_KEY = 'lwork_presence';
-const PRESENCE_TTL_MS = 30_000; // 30s — if no heartbeat, user is offline
+const PRESENCE_TTL_MS = 45_000; // 45s heartbeat window
 
 export const presenceApi = {
   /** Call every 10s while user is active on the page */
-  heartbeat(): void {
+  heartbeat(userId?: string | number): void {
     try {
-      const ts = Date.now().toString();
-      sessionStorage.setItem(PRESENCE_KEY, ts);
-      // Also persist across tabs via localStorage
-      localStorage.setItem(PRESENCE_KEY, ts);
+      const now = Date.now().toString();
+      sessionStorage.setItem(PRESENCE_KEY, now);
+      localStorage.setItem(PRESENCE_KEY, now);
+      if (userId) {
+        localStorage.setItem(`lwork_presence_user_${userId}`, now);
+      }
     } catch {}
   },
 
-  /** Check if THIS browser session is still "active" (last heartbeat < 30s ago) */
+  /** Check if THIS browser session is still "active" */
   isSelfOnline(): boolean {
     try {
       const ts = Number(localStorage.getItem(PRESENCE_KEY) || '0');
@@ -1428,38 +1430,80 @@ export const presenceApi = {
   },
 
   /**
-   * Best-effort check: if the OTHER user has their presence key updated recently.
-   * Since we can't read another browser's sessionStorage, we use a backend notification
-   * fallback: we consider them "online" if they sent a message in the last 60s.
+   * Checks if another user is currently online.
+   * 1. Checks shared cross-tab/local presence for the specific user ID (< 45s).
+   * 2. Checks if their last message or activity occurred within 15 minutes (active session window).
    */
-  isOtherOnline(lastMessageRaw?: string): boolean {
-    if (!lastMessageRaw) return false;
-    try {
-      const msgTime = new Date(lastMessageRaw).getTime();
-      return Date.now() - msgTime < 60_000;
-    } catch { return false; }
+  isOtherOnline(otherUserId?: string | number, lastMessageRaw?: string): boolean {
+    const now = Date.now();
+    // 1. Cross-tab/shared localStorage presence check
+    if (otherUserId) {
+      try {
+        const stored = Number(localStorage.getItem(`lwork_presence_user_${otherUserId}`) || '0');
+        if (stored > 0 && now - stored < PRESENCE_TTL_MS) {
+          return true;
+        }
+      } catch {}
+    }
+
+    // 2. Recent activity window (15 minutes from last message)
+    if (lastMessageRaw) {
+      try {
+        const msgDate = normalizeDate(lastMessageRaw);
+        if (now - msgDate.getTime() < 15 * 60 * 1000) {
+          return true;
+        }
+      } catch {}
+    }
+
+    return false;
   },
 };
 
 // ─────────────────────────────────────────────
-// SECTION 10 – CHAT API (Real-time polling)
+// SECTION 10 – CHAT API (Real-time polling & Cache)
 // ─────────────────────────────────────────────
 
-/** Shared map: convId → lastKnownMessageId (for incremental polling) */
+/** Shared map: convId → lastKnownMessageId */
 const _lastMsgId: Record<string, string> = {};
 
-/** Format ISO timestamp to HH:mm */
-function fmtTime(iso: string): string {
-  try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
-  catch { return ''; }
+/** In-memory message cache for instant tab restoration (0ms blank screen) */
+const _msgCache: Record<string, ChatMessage[]> = {};
+
+/** Normalize ISO or local date strings without timezone shifts */
+export function normalizeDate(input?: any): Date {
+  if (!input) return new Date();
+  if (input instanceof Date) return isNaN(input.getTime()) ? new Date() : input;
+  if (typeof input === 'number') return new Date(input);
+  if (typeof input === 'string') {
+    let s = input.trim();
+    if (!s) return new Date();
+    // If format is like "2026-08-16T00:04:12" without timezone offset, append 'Z' (UTC)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+      s += 'Z';
+    }
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+
+/** Format timestamp to HH:mm */
+export function fmtTime(iso: string): string {
+  try {
+    const d = normalizeDate(iso);
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
 }
 
 /** Format ISO date to "Hoje", "Ontem" or "DD/MM" */
 export function fmtChatDate(iso: string): string {
   try {
-    const d = new Date(iso);
+    const d = normalizeDate(iso);
     const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
     if (d.toDateString() === today.toDateString()) return 'Hoje';
     if (d.toDateString() === yesterday.toDateString()) return 'Ontem';
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -1558,39 +1602,42 @@ export const chatApi = {
     }
   },
 
-  // ── Fetch ALL messages for a conversation (initial load) ──────────
+  // ── Fetch ALL messages for a conversation (initial load with memory cache) ──
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
     if (!conversationId) return [];
 
+    let msgs: ChatMessage[] = [];
     if (conversationId.startsWith('conv_prop_')) {
       const proposalId = conversationId.replace('conv_prop_', '');
       try {
         const res = await negotiationsApi.getMessages(proposalId);
         const list = Array.isArray(res) ? res : ((res as any)?.content || []);
-        const msgs = list.map((m: any) => rawToChatMsg(m, conversationId));
-        if (msgs.length > 0) _lastMsgId[conversationId] = msgs[msgs.length - 1].id;
-        return msgs;
+        msgs = list.map((m: any) => rawToChatMsg(m, conversationId));
       } catch (e) {
         console.warn('Negotiation messages fetch error:', e);
-        return [];
       }
-    }
-
-    if (conversationId.startsWith('conv_contract_')) {
+    } else if (conversationId.startsWith('conv_contract_')) {
       try {
         const contractId = conversationId.replace('conv_contract_', '');
         const res = await http<any>(`/api/chat/messages/${contractId}`);
         const list = Array.isArray(res) ? res : (res?.messages || res?.content || []);
-        const msgs = list.map((m: any) => rawToChatMsg(m, conversationId));
-        if (msgs.length > 0) _lastMsgId[conversationId] = msgs[msgs.length - 1].id;
-        return msgs;
+        msgs = list.map((m: any) => rawToChatMsg(m, conversationId));
       } catch (e) {
         console.warn('Contract messages fetch error:', e);
-        return [];
       }
     }
 
-    return [];
+    if (msgs.length > 0) {
+      _lastMsgId[conversationId] = msgs[msgs.length - 1].id;
+      _msgCache[conversationId] = msgs;
+    }
+
+    return msgs.length > 0 ? msgs : (_msgCache[conversationId] || []);
+  },
+
+  /** Get cached messages instantly (0ms latency for tab switches) */
+  getCachedMessages(conversationId: string): ChatMessage[] {
+    return _msgCache[conversationId] || [];
   },
 
   // ── Poll for NEW messages only (since lastKnownId) ──────────────
@@ -1600,10 +1647,8 @@ export const chatApi = {
     if (currentMessages.length === 0) return allMessages;
     const lastKnownId = currentMessages[currentMessages.length - 1]?.id;
     if (!lastKnownId) return allMessages;
-    // Return only messages that are newer (appear after lastKnownId)
     const lastKnownIdx = allMessages.findIndex((m) => m.id === lastKnownId);
     if (lastKnownIdx === -1) {
-      // If we can't find the last known message, check if there are more total messages
       if (allMessages.length > currentMessages.length) {
         return allMessages.slice(currentMessages.length);
       }

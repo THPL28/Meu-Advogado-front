@@ -178,6 +178,8 @@ const mapUserProfileToFullLawyer = (user: UserProfile): FullLawyerProfile => {
   };
 };
 
+import { dataCache, CACHE_TTL } from '../services/cache';
+
 export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -189,22 +191,25 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [sidebarState, setSidebarState] = useState<SidebarState>('expanded');
   const [isChatExpanded, setIsChatExpanded] = useState<boolean>(false);
 
-  // Lawyers state
-  const [lawyers, setLawyers] = useState<FullLawyerProfile[]>([]);
+  // Lawyers state - hydrated instantly from cache
+  const [lawyers, setLawyers] = useState<FullLawyerProfile[]>(() => dataCache.get<FullLawyerProfile[]>('lawyers') || []);
   const [selectedLawyerSlug, setSelectedLawyerSlug] = useState<string>('');
 
   // Invite modal
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [selectedLawyerForInvite, setSelectedLawyerForInvite] = useState<FullLawyerProfile | null>(null);
 
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [documents, setDocuments] = useState<AppDocument[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Instant hydration from cache (0ms initial load, no blank screens)
+  const [jobs, setJobs] = useState<Job[]>(() => dataCache.get<Job[]>('jobs') || []);
+  const [proposals, setProposals] = useState<Proposal[]>(() => dataCache.get<Proposal[]>('proposals') || []);
+  const [contracts, setContracts] = useState<Contract[]>(() => dataCache.get<Contract[]>('contracts') || []);
+  const [payments, setPayments] = useState<Payment[]>(() => dataCache.get<Payment[]>('payments') || []);
+  const [documents, setDocuments] = useState<AppDocument[]>(() => dataCache.get<AppDocument[]>('documents') || []);
+  const [notifications, setNotifications] = useState<Notification[]>(() => dataCache.get<Notification[]>('notifications') || []);
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(() => dataCache.get<DashboardMetrics>('metrics') || null);
+  
+  // If cache is present, loading is immediately false (instant render)
+  const [loading, setLoading] = useState<boolean>(() => !dataCache.get('jobs'));
   const [globalSearch, setGlobalSearch] = useState<string>('');
 
   // Modals state
@@ -223,29 +228,36 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState('');
 
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => dataCache.get<UserProfile>('current_user') || null);
+
   const depositClientBalance = async (amount: number, method: 'PIX' | 'CARTAO_CREDITO' | 'BOLETO') => {
     await paymentsApi.depositClientBalance(amount, method);
-    await refreshData();
+    dataCache.invalidateMany(['payments', 'metrics', 'current_user']);
+    await refreshData(true);
   };
 
   const depositLawyerInternalBalance = async (amount: number, method: 'PIX' | 'CARTAO_CREDITO' | 'BOLETO') => {
     await paymentsApi.depositLawyerInternalBalance(amount, method);
-    await refreshData();
+    dataCache.invalidateMany(['payments', 'metrics', 'current_user']);
+    await refreshData(true);
   };
 
   const saveLawyerBankInfo = async (bankInfo: any) => {
     await paymentsApi.saveLawyerBankInfo(bankInfo);
-    await refreshData();
+    dataCache.invalidateMany(['current_user']);
+    await refreshData(true);
   };
 
   const paySubscriptionWithBalance = async (planName: 'Pro' | 'Premium', price: number) => {
     await paymentsApi.paySubscriptionWithInternalBalance(planName, price);
-    await refreshData();
+    dataCache.invalidateMany(['current_user']);
+    await refreshData(true);
   };
 
   const releaseMilestone = async (contractId: string, milestoneId: string) => {
     await contractsApi.releaseMilestone(contractId, milestoneId);
-    await refreshData();
+    dataCache.invalidateMany(['contracts', 'payments', 'metrics']);
+    await refreshData(true);
   };
 
   const openReviewModal = (info: { contractId: string; jobTitle: string; otherPartyName: string; otherPartyRole: Role }) => {
@@ -270,12 +282,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const reopenJob = async (jobId: string) => {
     await jobsApi.reopenJob(jobId);
-    await refreshData();
+    dataCache.invalidateMany(['jobs', 'metrics']);
+    await refreshData(true);
   };
 
   const withdrawProposal = async (proposalId: string) => {
     await proposalsApi.withdrawProposal(proposalId);
-    await refreshData();
+    dataCache.invalidateMany(['proposals', 'metrics']);
+    await refreshData(true);
   };
 
   const toggleSidebar = () => {
@@ -329,47 +343,103 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-
-  const refreshData = async () => {
+  /**
+   * Smart Refresh: Updates data in background silently.
+   * If cache is fresh and force is false, skips redundant HTTP calls.
+   */
+  const refreshData = async (force: boolean = false) => {
     try {
-      const realLawyers = await lawyersApi.getLawyers().catch(() => []);
-      const mappedLawyers = realLawyers.map(mapUserProfileToFullLawyer);
-      setLawyers(mappedLawyers);
+      // 1. Fetch lawyers if not cached
+      if (force || !dataCache.isFresh('lawyers')) {
+        lawyersApi.getLawyers().then(realLawyers => {
+          if (realLawyers.length > 0) {
+            const mapped = realLawyers.map(mapUserProfileToFullLawyer);
+            setLawyers(mapped);
+            dataCache.set('lawyers', mapped, CACHE_TTL.LAWYERS);
+          }
+        }).catch(() => {});
+      }
 
-      const user = await authApi.getCurrentUser().catch(() => null);
-      setCurrentUser(user);
+      // 2. Current user
+      let user = currentUser;
+      if (force || !user || !dataCache.isFresh('current_user')) {
+        user = await authApi.getCurrentUser().catch(() => null);
+        if (user) {
+          setCurrentUser(user);
+          dataCache.set('current_user', user, CACHE_TTL.JOBS);
+        }
+      }
 
       const token = getStoredToken();
       const hasActiveSession = user !== null || Boolean(token);
+
       if (hasActiveSession) {
-        // Clients fetch only THEIR jobs (data isolation). Lawyers get all open jobs for discovery.
         const isLawyer = user?.role === 'LAWYER';
-        const [j, p, c, pay, d, n, m] = await Promise.all([
-          (isLawyer ? jobsApi.getJobs() : jobsApi.getMyJobs()).catch(() => []),
-          proposalsApi.getProposals().catch(() => []),
-          contractsApi.getContracts().catch(() => []),
-          paymentsApi.getPayments().catch(() => []),
-          documentsApi.getDocuments().catch(() => []),
-          notificationsApi.getNotifications().catch(() => []),
-          dashboardApi.getMetrics().catch(() => null),
-        ]);
-        setJobs(j);
-        setProposals(p);
-        setContracts(c);
-        setPayments(pay);
-        setDocuments(d);
-        setNotifications(n);
-        setMetrics(m);
+
+        // Stale-while-revalidate: execute fetch in background
+        const promises: Promise<any>[] = [];
+
+        if (force || !dataCache.isFresh('jobs')) {
+          promises.push(
+            (isLawyer ? jobsApi.getJobs() : jobsApi.getMyJobs())
+              .then(j => { setJobs(j); dataCache.set('jobs', j, CACHE_TTL.JOBS); })
+              .catch(() => {})
+          );
+        }
+
+        if (force || !dataCache.isFresh('proposals')) {
+          promises.push(
+            proposalsApi.getProposals()
+              .then(p => { setProposals(p); dataCache.set('proposals', p, CACHE_TTL.PROPOSALS); })
+              .catch(() => {})
+          );
+        }
+
+        if (force || !dataCache.isFresh('contracts')) {
+          promises.push(
+            contractsApi.getContracts()
+              .then(c => { setContracts(c); dataCache.set('contracts', c, CACHE_TTL.CONTRACTS); })
+              .catch(() => {})
+          );
+        }
+
+        if (force || !dataCache.isFresh('payments')) {
+          promises.push(
+            paymentsApi.getPayments()
+              .then(pay => { setPayments(pay); dataCache.set('payments', pay, CACHE_TTL.PAYMENTS); })
+              .catch(() => {})
+          );
+        }
+
+        if (force || !dataCache.isFresh('documents')) {
+          promises.push(
+            documentsApi.getDocuments()
+              .then(d => { setDocuments(d); dataCache.set('documents', d, CACHE_TTL.DOCUMENTS); })
+              .catch(() => {})
+          );
+        }
+
+        if (force || !dataCache.isFresh('notifications')) {
+          promises.push(
+            notificationsApi.getNotifications()
+              .then(n => { setNotifications(n); dataCache.set('notifications', n, CACHE_TTL.NOTIFICATIONS); })
+              .catch(() => {})
+          );
+        }
+
+        if (force || !dataCache.isFresh('metrics')) {
+          promises.push(
+            dashboardApi.getMetrics()
+              .then(m => { setMetrics(m); dataCache.set('metrics', m, CACHE_TTL.METRICS); })
+              .catch(() => {})
+          );
+        }
+
+        await Promise.all(promises);
       } else {
         const j = await jobsApi.getJobs().catch(() => []);
         setJobs(j);
-        setProposals([]);
-        setContracts([]);
-        setPayments([]);
-        setDocuments([]);
-        setNotifications([]);
-        setMetrics(null);
+        dataCache.set('jobs', j, CACHE_TTL.JOBS);
       }
     } catch (err) {
       console.warn('Failed to load platform data:', err);
@@ -380,6 +450,21 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     refreshData();
+
+    // Silent background poll for notifications every 20s
+    const notifInterval = setInterval(() => {
+      const token = getStoredToken();
+      if (token) {
+        notificationsApi.getNotifications().then(n => {
+          if (Array.isArray(n)) {
+            setNotifications(n);
+            dataCache.set('notifications', n, CACHE_TTL.NOTIFICATIONS);
+          }
+        }).catch(() => {});
+      }
+    }, 20_000);
+
+    return () => clearInterval(notifInterval);
   }, []);
 
   const navigateToCaseDetail = (caseId: string, initialTab: 'OVERVIEW' | 'PROPOSALS' | 'DOCUMENTS' | 'CONTRACT' = 'OVERVIEW') => {

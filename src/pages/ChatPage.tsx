@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MessageSquare,
   Search,
@@ -19,26 +19,46 @@ import {
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
 import { ChatMessage, ChatConversation } from '../types';
-import { chatApi, proposalsApi, presenceApi, fmtChatDate } from '../services/api';
+import { chatApi, proposalsApi, presenceApi, fmtChatDate, normalizeDate } from '../services/api';
 import { UserAvatar } from '../components/ui/UserAvatar';
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Constants ────────────────────────────────────────────────────────────────
 const POLL_INTERVAL_MS = 2_000;
 const HEARTBEAT_MS     = 10_000;
 const SCROLL_THRESHOLD = 120;
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+/** Parse a raw ISO timestamp into epoch ms. Returns 0 on failure. */
+function parseTs(raw?: string): number {
+  if (!raw) return 0;
+  try {
+    const d = normalizeDate(raw);
+    const t = d.getTime();
+    if (!isNaN(t)) return t;
+  } catch {}
+  return 0;
+}
+
 function groupByDate(messages: ChatMessage[]): { date: string; msgs: ChatMessage[] }[] {
+  if (!messages || messages.length === 0) return [];
+
+  // Sort chronologically so date groups are strictly contiguous
+  const sorted = [...messages].sort((a, b) => parseTs(a.rawTimestamp) - parseTs(b.rawTimestamp));
+
   const groups: { date: string; msgs: ChatMessage[] }[] = [];
   let lastDate = '';
-  for (const m of messages) {
-    const d = fmtChatDate(m.rawTimestamp || m.timestamp || new Date().toISOString());
+
+  for (const m of sorted) {
+    const rawForDate = m.rawTimestamp || new Date().toISOString();
+    const d = fmtChatDate(rawForDate) || 'Hoje';
+
     if (d !== lastDate) {
       groups.push({ date: d, msgs: [] });
       lastDate = d;
     }
     groups[groups.length - 1].msgs.push(m);
   }
+
   return groups;
 }
 
@@ -51,7 +71,7 @@ function ReadReceipt({ msg, isMe }: { msg: ChatMessage; isMe: boolean }) {
   return <Check className="w-3.5 h-3.5 text-emerald-200/80" title="Enviado" />;
 }
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Component ────────────────────────────────────────────────────────────────
 export const ChatPage: React.FC = () => {
   const {
     user,
@@ -59,14 +79,17 @@ export const ChatPage: React.FC = () => {
     setActiveConversationId,
     role,
     refreshData,
-    sidebarState,
-    setSidebarState,
     openLawyerProfile,
   } = useLegalPlatform();
 
   const [conversations, setConversations]   = useState<ChatConversation[]>([]);
   const [activeConvId, setActiveConvId]     = useState<string | null>(activeConversationId || null);
-  const [messages, setMessages]             = useState<ChatMessage[]>([]);
+  
+  // Initialize with cached messages if available for 0ms instant display (no white screen)
+  const [messages, setMessages]             = useState<ChatMessage[]>(() => {
+    return activeConversationId ? chatApi.getCachedMessages(activeConversationId) : [];
+  });
+
   const [inputMessage, setInputMessage]     = useState('');
   const [sending, setSending]               = useState(false);
   const [accepting, setAccepting]           = useState(false);
@@ -83,22 +106,21 @@ export const ChatPage: React.FC = () => {
   const heartbeatRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeConvIdRef = useRef<string | null>(null);
   const messagesRef     = useRef<ChatMessage[]>([]);
-  const conversationsRef = useRef<ChatConversation[]>([]);
+  const otherLastActiveRef = useRef<number>(0);
 
   useEffect(() => { activeConvIdRef.current = activeConvId; }, [activeConvId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
-  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
-  const isFocusMode = sidebarState === 'hidden' || sidebarState === 'collapsed';
-
-  // â”€â”€ Presence heartbeat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Presence Heartbeat (every 10s with current user ID) ───────────────────
   useEffect(() => {
-    presenceApi.heartbeat();
-    heartbeatRef.current = setInterval(() => presenceApi.heartbeat(), HEARTBEAT_MS);
+    presenceApi.heartbeat(user?.id);
+    heartbeatRef.current = setInterval(() => {
+      presenceApi.heartbeat(user?.id);
+    }, HEARTBEAT_MS);
     return () => { if (heartbeatRef.current) clearInterval(heartbeatRef.current); };
-  }, []);
+  }, [user?.id]);
 
-  // â”€â”€ Scroll helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Scroll helpers ────────────────────────────────────────────────────────
   const isNearBottom = useCallback((): boolean => {
     const el = scrollAreaRef.current;
     if (!el) return true;
@@ -117,10 +139,9 @@ export const ChatPage: React.FC = () => {
     if (isNearBottom()) { setShowScrollBtn(false); setNewMsgCount(0); }
   }, [isNearBottom]);
 
-  // â”€â”€ Load conversations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Load conversations on mount or activeConversationId change ────────────
   useEffect(() => {
     (async () => {
-      setIsLoading(true);
       try {
         let convs = await chatApi.getConversations();
         if (activeConversationId && !convs.some((c) => c.id === activeConversationId)) {
@@ -137,27 +158,52 @@ export const ChatPage: React.FC = () => {
           setActiveConvId(firstId);
           setMobileShowThread(!!activeConversationId);
         }
-      } finally {
-        setIsLoading(false);
+      } catch (err) {
+        console.warn('Error loading conversations:', err);
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId]);
 
-  // â”€â”€ Load messages on conv change â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Load messages on conversation change (with instant cache hydration) ────
   useEffect(() => {
-    if (!activeConvId) { setMessages([]); return; }
-    setMessages([]);
-    setIsLoading(true);
+    if (!activeConvId) {
+      setMessages([]);
+      return;
+    }
+
+    // Hydrate immediately from memory cache to avoid any white screen
+    const cached = chatApi.getCachedMessages(activeConvId);
+    if (cached.length > 0) {
+      setMessages(cached);
+      setIsLoading(false);
+      setTimeout(() => scrollToBottom(true), 30);
+    } else {
+      setIsLoading(true);
+    }
+
+    // Fetch fresh messages from API
     chatApi.getMessages(activeConvId).then((msgs) => {
       setMessages(msgs);
       setIsLoading(false);
+
+      // Track last activity of other user
+      const lastFromOther = [...msgs].reverse().find((m) => m.senderId !== user?.id);
+      if (lastFromOther?.rawTimestamp) {
+        otherLastActiveRef.current = parseTs(lastFromOther.rawTimestamp);
+      }
+
+      // Check online status immediately
+      const activeConvObj = conversations.find((c) => c.id === activeConvId);
+      const isOnline = presenceApi.isOtherOnline(activeConvObj?.otherUser?.id, lastFromOther?.rawTimestamp);
+      setOtherUserOnline(isOnline);
+
       setTimeout(() => scrollToBottom(true), 60);
     }).catch(() => setIsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConvId]);
 
-  // â”€â”€ Polling loop (2s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Polling loop (2s) ─────────────────────────────────────────────────────
   useEffect(() => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     if (!activeConvId) return;
@@ -165,6 +211,7 @@ export const ChatPage: React.FC = () => {
     pollTimerRef.current = setInterval(async () => {
       const convId = activeConvIdRef.current;
       if (!convId) return;
+
       try {
         const newMsgs = await chatApi.pollNewMessages(convId, messagesRef.current);
         if (newMsgs.length > 0) {
@@ -172,6 +219,14 @@ export const ChatPage: React.FC = () => {
             const existingIds = new Set(prev.map((m) => m.id));
             const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
             if (fresh.length === 0) return prev;
+
+            // Track if other user sent a message just now
+            const latestFromOther = [...fresh].reverse().find((m) => m.senderId !== user?.id);
+            if (latestFromOther?.rawTimestamp) {
+              const ts = parseTs(latestFromOther.rawTimestamp);
+              if (ts > otherLastActiveRef.current) otherLastActiveRef.current = ts;
+            }
+
             const updated = [...prev, ...fresh];
             if (isNearBottom()) {
               setTimeout(() => scrollToBottom(true), 30);
@@ -181,28 +236,31 @@ export const ChatPage: React.FC = () => {
             }
             return updated;
           });
+
           // Update sidebar last message
           const last = newMsgs[newMsgs.length - 1];
           setConversations((prev) =>
             prev.map((c) =>
-              c.id === convId ? { ...c, lastMessage: last.content, lastMessageTime: last.timestamp } : c
+              c.id === convId ? { ...c, lastMessage: last.content, lastMessageTime: last.timestamp, lastMessageRaw: last.rawTimestamp } : c
             )
           );
         }
-        // Presence: mark other as online if they sent a message < 60s ago
-        const convMsgs = messagesRef.current;
-        const lastFromOther = [...convMsgs].reverse().find((m) => m.senderId !== user?.id);
-        setOtherUserOnline(presenceApi.isOtherOnline(lastFromOther?.rawTimestamp));
+
+        // Real-time presence check
+        const currentConv = conversations.find((c) => c.id === convId);
+        const lastFromOther = [...messagesRef.current].reverse().find((m) => m.senderId !== user?.id);
+        const isOnline = presenceApi.isOtherOnline(currentConv?.otherUser?.id, lastFromOther?.rawTimestamp);
+        setOtherUserOnline(isOnline);
       } catch { /* silent */ }
     }, POLL_INTERVAL_MS);
 
     return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConvId]);
+  }, [activeConvId, conversations]);
 
   const activeConv = conversations.find((c) => c.id === activeConvId);
 
-  // â”€â”€ Select conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Select conversation ───────────────────────────────────────────────────
   const handleSelectConv = (id: string) => {
     if (id === activeConvId) return;
     setActiveConvId(id);
@@ -212,7 +270,7 @@ export const ChatPage: React.FC = () => {
     setShowScrollBtn(false);
   };
 
-  // â”€â”€ Send message (with optimistic UI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Send message (with optimistic UI) ────────────────────────────────────
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = inputMessage.trim();
@@ -222,20 +280,22 @@ export const ChatPage: React.FC = () => {
     setInputMessage('');
     setSending(true);
 
+    const nowIso = new Date().toISOString();
     const optimisticId = 'opt_' + Date.now();
     const optimistic: ChatMessage = {
       id: optimisticId,
       conversationId: activeConvId,
       senderId: user?.id || '',
-      senderName: user?.name || 'VocÃª',
+      senderName: user?.name || 'Você',
       senderAvatar: user?.avatarUrl || '',
       content: text,
-      rawTimestamp: new Date().toISOString(),
+      rawTimestamp: nowIso,
       timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       isRead: true,
       isDelivered: false,
       isSending: true,
     };
+
     setMessages((prev) => [...prev, optimistic]);
     setTimeout(() => scrollToBottom(true), 30);
 
@@ -252,7 +312,7 @@ export const ChatPage: React.FC = () => {
       );
       setConversations((prev) =>
         prev.map((c) => c.id === activeConvId
-          ? { ...c, lastMessage: sent.content, lastMessageTime: sent.timestamp }
+          ? { ...c, lastMessage: sent.content, lastMessageTime: sent.timestamp, lastMessageRaw: sent.rawTimestamp }
           : c
         )
       );
@@ -265,13 +325,13 @@ export const ChatPage: React.FC = () => {
     }
   };
 
-  // â”€â”€ Accept proposal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Accept proposal ───────────────────────────────────────────────────────
   const handleAcceptProposalFromChat = async () => {
     if (!activeConv?.proposalId) return;
     setAccepting(true);
     try {
       await proposalsApi.acceptProposal(activeConv.proposalId);
-      await refreshData();
+      await refreshData(true);
       const convs = await chatApi.getConversations();
       setConversations(convs);
       const msgs = await chatApi.getMessages(activeConvId!);
@@ -291,11 +351,10 @@ export const ChatPage: React.FC = () => {
 
   const messageGroups = groupByDate(messages);
 
-  // â”€â”€â”€ render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div className="h-full w-full flex overflow-hidden bg-background animate-in fade-in duration-150">
 
-      {/* â”€â”€ Left Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Left Sidebar (Conversations List) ─────────────────────────────── */}
       <div className={`w-full md:w-80 lg:w-[340px] xl:w-[370px] h-full flex flex-col shrink-0 bg-card border-r border-border/70 z-10 ${
         mobileShowThread ? 'hidden md:flex' : 'flex'
       }`}>
@@ -305,7 +364,9 @@ export const ChatPage: React.FC = () => {
               <MessageSquare className="w-5 h-5 text-emerald-600" />
               Mensagens
             </h2>
-            <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[11px] font-bold">{conversations.length}</span>
+            <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[11px] font-bold">
+              {conversations.length}
+            </span>
           </div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -329,7 +390,7 @@ export const ChatPage: React.FC = () => {
           ) : (
             filteredConvs.map((conv) => {
               const isSelected = activeConvId === conv.id;
-              const convOnline = presenceApi.isOtherOnline(conv.lastMessageRaw);
+              const convOnline = presenceApi.isOtherOnline(conv.otherUser?.id, conv.lastMessageRaw);
               return (
                 <button
                   key={conv.id}
@@ -342,7 +403,9 @@ export const ChatPage: React.FC = () => {
                 >
                   <div className="relative shrink-0 mt-0.5">
                     <UserAvatar src={conv.otherUser.avatar} name={conv.otherUser.name} size="lg" />
-                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ring-2 ring-white rounded-full transition-colors ${convOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ring-2 ring-white rounded-full transition-colors ${
+                      convOnline ? 'bg-emerald-500 ring-emerald-200' : 'bg-slate-300'
+                    }`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
@@ -370,7 +433,7 @@ export const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* â”€â”€ Right Thread Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Right Thread Panel ────────────────────────────────────────────── */}
       <div
         className={`flex-1 h-full flex flex-col min-w-0 relative ${!mobileShowThread ? 'hidden md:flex' : 'flex'}`}
         style={{ background: 'hsl(220 14% 96%)' }}
@@ -383,13 +446,13 @@ export const ChatPage: React.FC = () => {
             <div>
               <h3 className="text-base font-bold text-foreground">Selecione uma conversa</h3>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                NegociaÃ§Ã£o e execuÃ§Ã£o acontecem aqui â€” seguro e privado entre as partes.
+                Negociação e execução acontecem aqui — seguro e privado entre as partes.
               </p>
             </div>
           </div>
         ) : (
           <>
-            {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── Header ─────────────────────────────────────────────────── */}
             <div className="shrink-0 bg-card border-b border-border/70 px-4 py-3 flex flex-col gap-2.5 shadow-sm z-10">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -405,7 +468,9 @@ export const ChatPage: React.FC = () => {
                     className="cursor-pointer shrink-0 relative"
                   >
                     <UserAvatar src={activeConv.otherUser.avatar} name={activeConv.otherUser.name} size="lg" />
-                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ring-2 ring-white rounded-full transition-colors ${otherUserOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ring-2 ring-white rounded-full transition-colors ${
+                      otherUserOnline ? 'bg-emerald-500 ring-emerald-200' : 'bg-slate-300'
+                    }`} />
                   </div>
 
                   <div className="min-w-0">
@@ -415,11 +480,15 @@ export const ChatPage: React.FC = () => {
                     >
                       <span className="truncate">{activeConv.otherUser.name}</span>
                     </h3>
-                    <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${otherUserOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                      <span>{otherUserOnline ? 'Online agora' : 'Offline'}</span>
-                      <span className="mx-1 opacity-40">Â·</span>
-                      <Briefcase className="w-3 h-3 shrink-0" />
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${
+                        otherUserOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                      }`} />
+                      <span className={otherUserOnline ? 'text-emerald-600 font-bold' : ''}>
+                        {otherUserOnline ? 'Online agora' : 'Offline'}
+                      </span>
+                      <span className="opacity-40">·</span>
+                      <Briefcase className="w-3 h-3 shrink-0 opacity-70" />
                       <span className="truncate">{activeConv.jobTitle}</span>
                     </p>
                   </div>
@@ -434,14 +503,14 @@ export const ChatPage: React.FC = () => {
                   {activeConv.state === 'READ_ONLY' && <Lock className="w-3 h-3" />}
                   {(!activeConv.state || activeConv.state === 'NEGOCIACAO') && <ShieldCheck className="w-3 h-3" />}
                   <span className="hidden sm:inline">
-                    {activeConv.state === 'EXECUCAO' ? 'Em ExecuÃ§Ã£o'
+                    {activeConv.state === 'EXECUCAO' ? 'Em Execução'
                       : activeConv.state === 'READ_ONLY' ? 'Encerrada'
-                      : 'NegociaÃ§Ã£o'}
+                      : 'Negociação'}
                   </span>
                 </span>
               </div>
 
-              {/* Proposal banner */}
+              {/* Proposal Banner */}
               {activeConv.state !== 'EXECUCAO' && activeConv.proposalId && (
                 <div className="p-3 bg-background rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -450,13 +519,13 @@ export const ChatPage: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-foreground flex items-center gap-2 truncate">
-                        Proposta de HonorÃ¡rios
+                        Proposta de Honorários
                         <span className="text-emerald-600 font-mono font-bold">
                           R$ {(activeConv.proposalValue || 0).toLocaleString('pt-BR')}
                         </span>
                       </p>
                       <p className="text-[11px] text-muted-foreground truncate">
-                        {activeConv.lawyerName} Â· Aguardando aceite para iniciar o mandato
+                        {activeConv.lawyerName} · Aguardando aceite para iniciar o mandato
                       </p>
                     </div>
                   </div>
@@ -468,14 +537,14 @@ export const ChatPage: React.FC = () => {
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
                     >
                       <ShieldCheck className="w-4 h-4" />
-                      {accepting ? 'Processando...' : 'Aceitar e Depositar CustÃ³dia'}
+                      {accepting ? 'Processando...' : 'Aceitar e Depositar Custódia'}
                     </button>
                   )}
                 </div>
               )}
             </div>
 
-            {/* â”€â”€ Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── Messages Stream ────────────────────────────────────────── */}
             <div
               ref={scrollAreaRef}
               onScroll={handleScroll}
@@ -493,17 +562,17 @@ export const ChatPage: React.FC = () => {
                 <div className="flex flex-col items-center justify-center h-32 text-center space-y-2">
                   <ShieldCheck className="w-10 h-10 text-muted-foreground/30" />
                   <p className="text-xs text-muted-foreground max-w-xs">
-                    Conversa segura e privada. Apenas vocÃª e <strong>{activeConv.otherUser.name}</strong> tÃªm acesso.
+                    Conversa segura e privada. Apenas você e <strong>{activeConv.otherUser.name}</strong> têm acesso.
                   </p>
                   <p className="text-[11px] text-muted-foreground/60">Envie a primeira mensagem!</p>
                 </div>
               ) : (
                 messageGroups.map((group) => (
                   <div key={group.date}>
-                    {/* Date separator */}
+                    {/* Unique Date Separator per Group */}
                     <div className="flex items-center gap-3 my-4">
                       <div className="flex-1 h-px bg-border/50" />
-                      <span className="text-[11px] font-semibold text-muted-foreground bg-white/80 dark:bg-card/80 backdrop-blur-sm px-3 py-1 rounded-full border border-border/50 shadow-sm">
+                      <span className="text-[11px] font-semibold text-muted-foreground bg-white/90 dark:bg-card/90 backdrop-blur-sm px-3 py-1 rounded-full border border-border/50 shadow-sm">
                         {group.date}
                       </span>
                       <div className="flex-1 h-px bg-border/50" />
@@ -573,7 +642,7 @@ export const ChatPage: React.FC = () => {
                                 )}
 
                                 <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                  <span className={`text-[10px] font-mono ${isMe ? 'text-white/60' : 'text-muted-foreground'}`}>
+                                  <span className={`text-[10px] font-mono ${isMe ? 'text-white/70' : 'text-muted-foreground'}`}>
                                     {msg.timestamp}
                                   </span>
                                   <ReadReceipt msg={msg} isMe={isMe} />
@@ -611,12 +680,12 @@ export const ChatPage: React.FC = () => {
               </button>
             )}
 
-            {/* â”€â”€ Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── Input Box ──────────────────────────────────────────────── */}
             <div className="shrink-0 bg-card border-t border-border/70 px-4 py-3 z-20">
               {activeConv.state === 'READ_ONLY' ? (
                 <div className="p-3 bg-background border border-border rounded-xl text-center text-xs text-muted-foreground font-semibold flex items-center justify-center gap-2">
                   <Lock className="w-4 h-4" />
-                  Esta conversa foi encerrada e estÃ¡ em modo somente leitura.
+                  Esta conversa foi encerrada e está em modo somente leitura.
                 </div>
               ) : (
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
@@ -640,8 +709,8 @@ export const ChatPage: React.FC = () => {
                     }}
                     placeholder={
                       activeConv.state === 'EXECUCAO'
-                        ? 'Mensagem segura â€” apenas vocÃª e o advogado tÃªm acesso...'
-                        : 'Escreva sua mensagem de negociaÃ§Ã£o...'
+                        ? 'Mensagem segura — apenas você e o advogado têm acesso...'
+                        : 'Escreva sua mensagem de negociação...'
                     }
                     autoComplete="off"
                     className="flex-1 bg-background border border-border rounded-2xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-emerald-600 transition-all"
@@ -665,7 +734,7 @@ export const ChatPage: React.FC = () => {
               <div className="flex items-center justify-center gap-1.5 mt-2">
                 <Lock className="w-3 h-3 text-muted-foreground/50" />
                 <span className="text-[10px] text-muted-foreground/50">
-                  Conversa privada e segura â€” somente as partes contratantes tÃªm acesso
+                  Conversa privada e segura — somente as partes contratantes têm acesso
                 </span>
               </div>
             </div>
@@ -675,4 +744,3 @@ export const ChatPage: React.FC = () => {
     </div>
   );
 };
-
