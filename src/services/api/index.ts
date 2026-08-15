@@ -1528,6 +1528,8 @@ function rawToChatMsg(m: any, conversationId: string): ChatMessage {
   };
 }
 
+import { dataCache, CACHE_TTL } from '../cache';
+
 export const chatApi = {
   // ── Build conversation list (contracts + proposals) ──────────────
   async getConversations(): Promise<ChatConversation[]> {
@@ -1595,14 +1597,23 @@ export const chatApi = {
         }
       });
 
+      if (convList.length > 0) {
+        dataCache.set('chat_conversations', convList, CACHE_TTL.CHAT_CONVS);
+      }
+
       return convList;
     } catch (e) {
       console.warn('Chat conversations error:', e);
-      return [];
+      return dataCache.get<ChatConversation[]>('chat_conversations') || [];
     }
   },
 
-  // ── Fetch ALL messages for a conversation (initial load with memory cache) ──
+  /** Get cached conversations instantly (0ms latency for tab switches) */
+  getCachedConversations(): ChatConversation[] {
+    return dataCache.get<ChatConversation[]>('chat_conversations') || [];
+  },
+
+  // ── Fetch ALL messages for a conversation (initial load with cache) ──
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
     if (!conversationId) return [];
 
@@ -1630,14 +1641,15 @@ export const chatApi = {
     if (msgs.length > 0) {
       _lastMsgId[conversationId] = msgs[msgs.length - 1].id;
       _msgCache[conversationId] = msgs;
+      dataCache.set('chat_msgs_' + conversationId, msgs, CACHE_TTL.CHAT_MSGS);
     }
 
-    return msgs.length > 0 ? msgs : (_msgCache[conversationId] || []);
+    return msgs.length > 0 ? msgs : chatApi.getCachedMessages(conversationId);
   },
 
   /** Get cached messages instantly (0ms latency for tab switches) */
   getCachedMessages(conversationId: string): ChatMessage[] {
-    return _msgCache[conversationId] || [];
+    return _msgCache[conversationId] || dataCache.get<ChatMessage[]>('chat_msgs_' + conversationId) || [];
   },
 
   // ── Poll for NEW messages only (since lastKnownId) ──────────────

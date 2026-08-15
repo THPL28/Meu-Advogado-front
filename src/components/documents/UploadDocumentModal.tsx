@@ -3,6 +3,7 @@ import { X, UploadCloud, FileText, CheckCircle2, Shield, Lock, AlertCircle, Load
 import { useLegalPlatform } from '../../hooks/useLegalPlatform';
 import { documentsApi } from '../../services/api';
 import { DocumentClassification } from '../../types';
+import { dataCache } from '../../services/cache';
 
 interface UploadDocumentModalProps {
   contractId?: string | number;
@@ -86,7 +87,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
         });
       }
 
-      await refreshData();
+      dataCache.invalidateMany(['documents', 'metrics']);
+      await refreshData(true);
       if (onSuccess) onSuccess();
       setIsUploadDocModalOpen(false);
       setSelectedFile(null);

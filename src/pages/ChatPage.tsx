@@ -16,10 +16,12 @@ import {
   Check,
   CheckCheck,
   Briefcase,
+  X,
+  File,
 } from 'lucide-react';
 import { useLegalPlatform } from '../hooks/useLegalPlatform';
-import { ChatMessage, ChatConversation } from '../types';
-import { chatApi, proposalsApi, presenceApi, fmtChatDate, normalizeDate } from '../services/api';
+import { ChatMessage, ChatConversation, Role } from '../types';
+import { chatApi, proposalsApi, presenceApi, fmtChatDate, normalizeDate, documentsApi } from '../services/api';
 import { UserAvatar } from '../components/ui/UserAvatar';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -28,7 +30,6 @@ const HEARTBEAT_MS     = 10_000;
 const SCROLL_THRESHOLD = 120;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-/** Parse a raw ISO timestamp into epoch ms. Returns 0 on failure. */
 function parseTs(raw?: string): number {
   if (!raw) return 0;
   try {
@@ -71,6 +72,14 @@ function ReadReceipt({ msg, isMe }: { msg: ChatMessage; isMe: boolean }) {
   return <Check className="w-3.5 h-3.5 text-emerald-200/80" title="Enviado" />;
 }
 
+interface PendingAttachment {
+  id: string;
+  name: string;
+  size: string;
+  type: 'PDF' | 'DOCX' | 'XLSX' | 'PNG' | 'JPG';
+  file: File;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export const ChatPage: React.FC = () => {
   const {
@@ -80,20 +89,24 @@ export const ChatPage: React.FC = () => {
     role,
     refreshData,
     openLawyerProfile,
+    openClientProfile,
   } = useLegalPlatform();
 
-  const [conversations, setConversations]   = useState<ChatConversation[]>([]);
-  const [activeConvId, setActiveConvId]     = useState<string | null>(activeConversationId || null);
-  
-  // Initialize with cached messages if available for 0ms instant display (no white screen)
+  // Instant Hydration from Cache (0ms latency, eliminates any white screen flash)
+  const cachedConvs = chatApi.getCachedConversations();
+  const initialActiveConvId = activeConversationId || (cachedConvs.length > 0 ? cachedConvs[0].id : null);
+
+  const [conversations, setConversations]   = useState<ChatConversation[]>(cachedConvs);
+  const [activeConvId, setActiveConvId]     = useState<string | null>(initialActiveConvId);
   const [messages, setMessages]             = useState<ChatMessage[]>(() => {
-    return activeConversationId ? chatApi.getCachedMessages(activeConversationId) : [];
+    return initialActiveConvId ? chatApi.getCachedMessages(initialActiveConvId) : [];
   });
 
   const [inputMessage, setInputMessage]     = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [sending, setSending]               = useState(false);
   const [accepting, setAccepting]           = useState(false);
-  const [mobileShowThread, setMobileShowThread] = useState(false);
+  const [mobileShowThread, setMobileShowThread] = useState(Boolean(initialActiveConvId));
   const [searchTerm, setSearchTerm]         = useState('');
   const [showScrollBtn, setShowScrollBtn]   = useState(false);
   const [newMsgCount, setNewMsgCount]       = useState(0);
@@ -102,6 +115,7 @@ export const ChatPage: React.FC = () => {
 
   const messagesEndRef  = useRef<HTMLDivElement>(null);
   const scrollAreaRef   = useRef<HTMLDivElement>(null);
+  const fileInputRef    = useRef<HTMLInputElement>(null);
   const pollTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeConvIdRef = useRef<string | null>(null);
@@ -110,6 +124,16 @@ export const ChatPage: React.FC = () => {
 
   useEffect(() => { activeConvIdRef.current = activeConvId; }, [activeConvId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // ── Role-aware Profile Navigation ─────────────────────────────────────────
+  const handleOpenProfile = (otherUser?: { id?: string; name?: string; role?: Role }) => {
+    if (!otherUser) return;
+    if (otherUser.role === 'CLIENT') {
+      openClientProfile(otherUser.id || '');
+    } else {
+      openLawyerProfile(otherUser.id || otherUser.name || '');
+    }
+  };
 
   // ── Presence Heartbeat (every 10s with current user ID) ───────────────────
   useEffect(() => {
@@ -139,7 +163,7 @@ export const ChatPage: React.FC = () => {
     if (isNearBottom()) { setShowScrollBtn(false); setNewMsgCount(0); }
   }, [isNearBottom]);
 
-  // ── Load conversations on mount or activeConversationId change ────────────
+  // ── Load conversations in background ──────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -153,10 +177,9 @@ export const ChatPage: React.FC = () => {
           }
         }
         setConversations(convs);
-        const firstId = activeConversationId || (convs.length > 0 ? convs[0].id : null);
-        if (firstId) {
+        const firstId = activeConversationId || (convs.length > 0 ? (activeConvId || convs[0].id) : null);
+        if (firstId && firstId !== activeConvId) {
           setActiveConvId(firstId);
-          setMobileShowThread(!!activeConversationId);
         }
       } catch (err) {
         console.warn('Error loading conversations:', err);
@@ -270,43 +293,98 @@ export const ChatPage: React.FC = () => {
     setShowScrollBtn(false);
   };
 
-  // ── Send message (with optimistic UI) ────────────────────────────────────
+  // ── File Selection Handler ────────────────────────────────────────────────
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList: File[] = Array.from(files);
+    const newAttachments: PendingAttachment[] = fileList.map((f: File) => {
+      const ext = f.name.split('.').pop()?.toUpperCase() || 'PDF';
+      let type: 'PDF' | 'DOCX' | 'XLSX' | 'PNG' | 'JPG' = 'PDF';
+      if (ext === 'DOC' || ext === 'DOCX') type = 'DOCX';
+      else if (ext === 'XLS' || ext === 'XLSX') type = 'XLSX';
+      else if (ext === 'PNG') type = 'PNG';
+      else if (ext === 'JPG' || ext === 'JPEG') type = 'JPG';
+
+      const sizeStr = f.size > 1024 * 1024
+        ? (f.size / (1024 * 1024)).toFixed(1) + ' MB'
+        : Math.round(f.size / 1024) + ' KB';
+
+      return {
+        id: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        name: f.name,
+        size: sizeStr,
+        type,
+        file: f,
+      };
+    });
+
+    setPendingAttachments((prev) => [...prev, ...newAttachments]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removePendingAttachment = (id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  // ── Send message (with attachments & optimistic UI) ──────────────────────
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = inputMessage.trim();
-    if (!text || !activeConvId || sending) return;
+    if ((!text && pendingAttachments.length === 0) || !activeConvId || sending) return;
     if (activeConv?.state === 'READ_ONLY') return;
 
+    const currentPending = [...pendingAttachments];
     setInputMessage('');
+    setPendingAttachments([]);
     setSending(true);
 
     const nowIso = new Date().toISOString();
     const optimisticId = 'opt_' + Date.now();
+
+    const formattedAttachments = currentPending.map((a) => ({
+      id: a.id,
+      name: a.name,
+      size: a.size,
+      type: a.type,
+      url: '#',
+    }));
+
     const optimistic: ChatMessage = {
       id: optimisticId,
       conversationId: activeConvId,
       senderId: user?.id || '',
       senderName: user?.name || 'Você',
       senderAvatar: user?.avatarUrl || '',
-      content: text,
+      content: text || (currentPending.length > 0 ? `[Arquivo Anexo: ${currentPending.map((a) => a.name).join(', ')}]` : ''),
       rawTimestamp: nowIso,
       timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       isRead: true,
       isDelivered: false,
       isSending: true,
+      attachments: formattedAttachments.length > 0 ? formattedAttachments : undefined,
     };
 
     setMessages((prev) => [...prev, optimistic]);
     setTimeout(() => scrollToBottom(true), 30);
 
     try {
+      // Upload pending files if any
+      for (const att of currentPending) {
+        documentsApi.uploadSecureDocument(att.file, {
+          classification: 'RESTRICTED',
+        }).catch(() => {});
+      }
+
       const sent = await chatApi.sendMessage(
         activeConvId,
-        text,
-        undefined,
+        text || (currentPending.length > 0 ? `[Arquivo Anexo: ${currentPending.map((a) => a.name).join(', ')}]` : ''),
+        formattedAttachments.length > 0 ? formattedAttachments : undefined,
         activeConv?.otherUser?.id,
         otherUserOnline,
       );
+
       setMessages((prev) =>
         prev.map((m) => m.id === optimisticId ? { ...sent, isDelivered: true, isSending: false } : m)
       );
@@ -384,8 +462,8 @@ export const ChatPage: React.FC = () => {
           {filteredConvs.length === 0 ? (
             <div className="p-8 text-center space-y-2">
               <MessageSquare className="w-8 h-8 text-muted-foreground/40 mx-auto" />
-              <p className="text-xs text-muted-foreground">Nenhuma conversa ainda.</p>
-              <p className="text-[11px] text-muted-foreground/60">As conversas aparecem quando um advogado envia uma proposta.</p>
+              <p className="text-xs text-muted-foreground font-medium">Nenhuma conversa ainda.</p>
+              <p className="text-[11px] text-muted-foreground/70">As conversas aparecem quando um advogado envia uma proposta.</p>
             </div>
           ) : (
             filteredConvs.map((conv) => {
@@ -464,8 +542,9 @@ export const ChatPage: React.FC = () => {
                   </button>
 
                   <div
-                    onClick={() => activeConv.otherUser && openLawyerProfile(activeConv.otherUser.id || activeConv.otherUser.name)}
-                    className="cursor-pointer shrink-0 relative"
+                    onClick={() => handleOpenProfile(activeConv.otherUser)}
+                    className="cursor-pointer shrink-0 relative hover:opacity-90 transition-opacity"
+                    title={`Ver perfil de ${activeConv.otherUser.name}`}
                   >
                     <UserAvatar src={activeConv.otherUser.avatar} name={activeConv.otherUser.name} size="lg" />
                     <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ring-2 ring-white rounded-full transition-colors ${
@@ -475,8 +554,9 @@ export const ChatPage: React.FC = () => {
 
                   <div className="min-w-0">
                     <h3
-                      onClick={() => activeConv.otherUser && openLawyerProfile(activeConv.otherUser.id || activeConv.otherUser.name)}
+                      onClick={() => handleOpenProfile(activeConv.otherUser)}
                       className="text-sm font-extrabold text-foreground cursor-pointer hover:text-emerald-600 transition-colors truncate flex items-center gap-1.5"
+                      title={`Ver perfil de ${activeConv.otherUser.name}`}
                     >
                       <span className="truncate">{activeConv.otherUser.name}</span>
                     </h3>
@@ -564,7 +644,7 @@ export const ChatPage: React.FC = () => {
                   <p className="text-xs text-muted-foreground max-w-xs">
                     Conversa segura e privada. Apenas você e <strong>{activeConv.otherUser.name}</strong> têm acesso.
                   </p>
-                  <p className="text-[11px] text-muted-foreground/60">Envie a primeira mensagem!</p>
+                  <p className="text-[11px] text-muted-foreground/60">Envie a primeira mensagem ou anexe arquivos do processo!</p>
                 </div>
               ) : (
                 messageGroups.map((group) => (
@@ -600,7 +680,10 @@ export const ChatPage: React.FC = () => {
                             className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${isSameAuthor ? 'mt-0.5' : 'mt-3'}`}
                           >
                             {!isMe && !isSameAuthor && (
-                              <div className="shrink-0 mr-2 self-end mb-1">
+                              <div
+                                onClick={() => handleOpenProfile(activeConv.otherUser)}
+                                className="shrink-0 mr-2 self-end mb-1 cursor-pointer hover:opacity-80 transition-opacity"
+                              >
                                 <UserAvatar src={activeConv.otherUser.avatar} name={activeConv.otherUser.name} size="sm" />
                               </div>
                             )}
@@ -624,18 +707,31 @@ export const ChatPage: React.FC = () => {
 
                                 <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
 
+                                {/* File Attachments inside message bubble */}
                                 {msg.attachments && msg.attachments.length > 0 && (
                                   <div className="space-y-1.5 mt-2 pt-2 border-t border-white/20">
                                     {msg.attachments.map((att) => (
-                                      <div key={att.id} className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs ${
-                                        isMe ? 'bg-white/15' : 'bg-muted border border-border'
-                                      }`}>
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                          <FileText className="w-3.5 h-3.5 shrink-0" />
-                                          <span className="truncate font-medium">{att.name}</span>
-                                          <span className="opacity-60 shrink-0">{att.size}</span>
+                                      <div
+                                        key={att.id}
+                                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs ${
+                                          isMe ? 'bg-black/15 text-white' : 'bg-muted border border-border'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2.5 overflow-hidden">
+                                          <File className="w-4 h-4 shrink-0" />
+                                          <div className="truncate">
+                                            <p className="truncate font-bold text-xs">{att.name}</p>
+                                            <span className="opacity-75 text-[10px]">{att.size}</span>
+                                          </div>
                                         </div>
-                                        <Download className="w-3.5 h-3.5 cursor-pointer hover:opacity-80 shrink-0" />
+                                        <a
+                                          href={att.url || '#'}
+                                          download={att.name}
+                                          className={`p-1 rounded-lg hover:opacity-80 transition-opacity shrink-0 ${isMe ? 'text-white' : 'text-emerald-600'}`}
+                                          title="Baixar arquivo"
+                                        >
+                                          <Download className="w-4 h-4" />
+                                        </a>
                                       </div>
                                     ))}
                                   </div>
@@ -680,8 +776,42 @@ export const ChatPage: React.FC = () => {
               </button>
             )}
 
-            {/* ── Input Box ──────────────────────────────────────────────── */}
-            <div className="shrink-0 bg-card border-t border-border/70 px-4 py-3 z-20">
+            {/* ── Input Box & Pending Attachments ────────────────────────── */}
+            <div className="shrink-0 bg-card border-t border-border/70 px-4 py-3 z-20 space-y-2">
+              
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                multiple
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.zip"
+              />
+
+              {/* Pending Attachments preview chips */}
+              {pendingAttachments.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap pb-1">
+                  {pendingAttachments.map((att) => (
+                    <div
+                      key={att.id}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-xl border border-border text-xs font-semibold text-foreground animate-in fade-in"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span className="truncate max-w-[140px]">{att.name}</span>
+                      <span className="text-[10px] text-muted-foreground">({att.size})</span>
+                      <button
+                        type="button"
+                        onClick={() => removePendingAttachment(att.id)}
+                        className="p-0.5 hover:bg-background rounded-full text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {activeConv.state === 'READ_ONLY' ? (
                 <div className="p-3 bg-background border border-border rounded-xl text-center text-xs text-muted-foreground font-semibold flex items-center justify-center gap-2">
                   <Lock className="w-4 h-4" />
@@ -691,8 +821,9 @@ export const ChatPage: React.FC = () => {
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => fileInputRef.current?.click()}
                     className="p-2.5 text-muted-foreground hover:text-foreground rounded-xl bg-muted hover:bg-muted/80 transition-colors shrink-0 cursor-pointer"
-                    title="Anexar arquivo"
+                    title="Anexar arquivo do processo"
                   >
                     <Paperclip className="w-4 h-4" />
                   </button>
@@ -718,7 +849,7 @@ export const ChatPage: React.FC = () => {
 
                   <button
                     type="submit"
-                    disabled={sending || !inputMessage.trim()}
+                    disabled={sending || (!inputMessage.trim() && pendingAttachments.length === 0)}
                     className="w-10 h-10 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full shadow-sm transition-all cursor-pointer shrink-0"
                     title="Enviar (Enter)"
                   >
@@ -731,7 +862,7 @@ export const ChatPage: React.FC = () => {
                 </form>
               )}
 
-              <div className="flex items-center justify-center gap-1.5 mt-2">
+              <div className="flex items-center justify-center gap-1.5 pt-0.5">
                 <Lock className="w-3 h-3 text-muted-foreground/50" />
                 <span className="text-[10px] text-muted-foreground/50">
                   Conversa privada e segura — somente as partes contratantes têm acesso
