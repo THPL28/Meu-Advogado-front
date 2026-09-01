@@ -1,7 +1,15 @@
 /**
- * LegaWork Business Rules v2 - Feature Flags (Phase 0 Baseline)
- * All financial, payout, escrow hold, and auto-release features are disabled by default.
+ * Production feature flags.
+ *
+ * The frontend must never silently simulate business operations. Features that
+ * require a backend/provider are opt-in through Vite environment variables.
  */
+
+function envBoolean(name: string, fallback = false): boolean {
+  const value = import.meta.env[name];
+  if (value === undefined) return fallback;
+  return value === 'true' || value === '1';
+}
 
 export interface FeatureFlags {
   financials: {
@@ -21,17 +29,18 @@ export interface FeatureFlags {
 
 export const FEATURE_FLAGS: FeatureFlags = {
   financials: {
-    stripe_enabled: false,
+    stripe_enabled: envBoolean('VITE_STRIPE_ENABLED'),
   },
   payouts: {
-    paypal_enabled: false,
+    paypal_enabled: envBoolean('VITE_PAYPAL_ENABLED'),
   },
   funds: {
-    hold_enabled: false,
+    hold_enabled: envBoolean('VITE_ESCROW_ENABLED'),
   },
-  auto_release_enabled: false,
+  auto_release_enabled: envBoolean('VITE_AUTO_RELEASE_ENABLED'),
   auth: {
-    cookie_session_enabled: false,
+    // Backend-issued HttpOnly cookies are the preferred production mode.
+    cookie_session_enabled: envBoolean('VITE_COOKIE_SESSION_ENABLED', true),
   },
 };
 
